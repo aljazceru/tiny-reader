@@ -1,0 +1,275 @@
+/*
+ * tiny reader — full-page workspace styles.
+ * Shares the palette and feel of the popup, laid out for a whole tab.
+ */
+
+:root {
+  color-scheme: light dark;
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --field: #ffffff;
+  --fg: #1c1e21;
+  --muted: #6b7075;
+  --border: #d3d7dd;
+  --accent: #2b7de9;
+  --error: #b3261e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1e2023;
+    --surface: #26282c;
+    --field: #17181b;
+    --fg: #e8eaed;
+    --muted: #9aa0a6;
+    --border: #3c4043;
+    --accent: #7aabff;
+    --error: #f28b82;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.5 system-ui, sans-serif;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 20px 16px 4px;
+}
+
+header img {
+  border-radius: 7px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 650;
+}
+
+header p {
+  margin: 1px 0 0;
+  font-size: 13px;
+}
+
+h2 {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+main {
+  display: grid;
+  gap: 14px;
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 14px 16px 40px;
+}
+
+section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.field {
+  margin-bottom: 16px;
+}
+
+.field:last-child {
+  margin-bottom: 0;
+}
+
+.field > label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+textarea,
+input[type="url"] {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--field);
+  color: var(--fg);
+  font: inherit;
+}
+
+textarea {
+  min-height: 140px;
+  resize: vertical;
+  margin-bottom: 8px;
+}
+
+input[type="file"] {
+  width: 100%;
+  padding: 7px;
+  border: 1px dashed var(--border);
+  border-radius: 7px;
+  color: var(--muted);
+}
+
+input[type="file"]::file-selector-button {
+  margin-right: 10px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+button {
+  padding: 8px 13px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--field);
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+@media (prefers-color-scheme: dark) {
+  button.primary {
+    color: #101418;
+  }
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.row input[type="url"] {
+  flex: 1;
+  min-width: 200px;
+}
+
+.controls button {
+  min-width: 44px;
+}
+
+.controls #playPause {
+  flex: 1;
+}
+
+.controls #readAgain,
+.controls #saveCurrent {
+  margin-left: auto;
+}
+
+.controls .primary {
+  min-width: 110px;
+}
+
+select {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--field);
+  color: var(--fg);
+  font: inherit;
+}
+
+#settings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+#settings label {
+  flex: 1;
+  min-width: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+#progress {
+  margin: 12px 0 0;
+}
+
+#preview {
+  margin: 6px 0 0;
+  min-height: 2.9em;
+  max-height: 4.4em;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  color: var(--muted);
+  font-style: italic;
+}
+
+#status {
+  margin: 0;
+  min-height: 1.4em;
+}
+
+#status.error {
+  color: var(--error);
+  font-weight: 600;
+}
+
+.muted {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+@media (max-width: 560px) {
+  header,
+  main {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  section {
+    padding: 12px;
+  }
+
+  .controls button {
+    flex: 1 1 auto;
+  }
+}

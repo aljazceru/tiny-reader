@@ -1,0 +1,62 @@
+{
+  "manifest_version": 3,
+  "name": "tiny reader",
+  "version": "1.0.0",
+  "description": "tiny reader reads selected text, pages, pasted text, URLs, PDFs and ePubs aloud with the local tiny-voca speech model. No cloud, no account.",
+  "author": "tiny reader contributors",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "tiny-reader@myfirefox.local",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
+    }
+  },
+  "icons": {
+    "48": "icons/icon.svg",
+    "96": "icons/icon.svg"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["vendor/readability.js", "content/content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "permissions": [
+    "storage",
+    "menus",
+    "scripting",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "scripts": [
+      "logic/resample.js",
+      "logic/library.js",
+      "logic/model-store.js",
+      "logic/prefs.js",
+      "background/player.js",
+      "background/background.js"
+    ]
+  },
+  "action": {
+    "default_title": "tiny reader",
+    "default_popup": "popup/popup.html",
+    "default_icon": "icons/icon.svg"
+  },
+  "commands": {
+    "toggle-read": {
+      "suggested_key": {
+        "default": "Ctrl+Alt+R"
+      },
+      "description": "Read the selection (or the page) aloud / pause"
+    }
+  },
+  "homepage_url": "https://github.com/n4ze3m/tiny-voca"
+}

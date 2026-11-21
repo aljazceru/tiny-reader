@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>tiny reader</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <img src="../icons/icon.svg" alt="" width="22" height="22">
+    <h1>tiny reader</h1>
+  </header>
+
+  <section id="idle">
+    <button id="readSelection" class="primary" type="button">Read selection</button>
+    <button id="readPage" type="button">Read whole page</button>
+    <p id="selectionHint" class="muted">Select text on the page, then it is read exactly that.</p>
+  </section>
+
+  <section id="transport" hidden>
+    <div class="row">
+      <button id="prev" type="button" title="Previous sentence">⏮</button>
+      <button id="playPause" class="primary" type="button">⏸ Pause</button>
+      <button id="next" type="button" title="Next sentence">⏭</button>
+      <button id="stop" type="button" title="Stop">⏹</button>
+    </div>
+    <p id="progress" class="muted">Preparing…</p>
+    <p id="preview"></p>
+  </section>
+
+  <section id="workspace">
+    <button id="openReader" type="button">Open reader workspace</button>
+  </section>
+
+  <section id="settings">
+    <label>Voice
+      <select id="voice">
+        <option value="M2">M2 (male)</option>
+        <option value="F2">F2 (female)</option>
+      </select>
+    </label>
+    <label>Speed
+      <select id="speed">
+        <option value="0.75">0.75×</option>
+        <option value="1">1×</option>
+        <option value="1.25">1.25×</option>
+        <option value="1.5">1.5×</option>
+      </select>
+    </label>
+  </section>
+
+  <p id="status" role="status"></p>
+
+  <script src="popup.js"></script>
+</body>
+</html>

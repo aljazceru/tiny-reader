@@ -1,0 +1,30 @@
+tiny reader
+===========
+
+Project code
+------------
+
+The tiny reader extension code (manifest, background, engine, content,
+reader, popup, logic, icons, test, tools — everything not listed under
+"Vendored third-party components" below) is released under the MIT License;
+see the `LICENSE` file.
+
+Vendored third-party components
+-------------------------------
+
+| Path | Upstream source | License |
+| --- | --- | --- |
+| `vendor/tiny-voca.js`, `vendor/text.js`, `vendor/dizione/` | [n4ze3m/tiny-voca](https://github.com/n4ze3m/tiny-voca) `js/` directory, upstream revision `15a36ab` | Apache-2.0 (see `vendor/LICENSE-tiny-voca`) |
+| `vendor/readability.js` | [mozilla/readability](https://github.com/mozilla/readability) `@mozilla/readability@0.6.0`, single-file build | Apache-2.0 (header in file) |
+| `vendor/pdf.mjs`, `vendor/pdf.worker.mjs` | [mozilla/pdf.js](https://github.com/mozilla/pdf.js), `pdfjs-dist@6.5.438` from unpkg, unmodified | Apache-2.0 (headers in files) |
+| `vendor/fflate.js` | [101arrowz/fflate](https://github.com/101arrowz/fflate) 0.8.2 ESM browser build, unmodified | MIT (header in file) |
+
+Model data
+----------
+
+`assets/tiny-voca.gguf` is the upstream `gguf/tiny-voca-js.gguf`
+([weights on Hugging Face](https://huggingface.co/n4ze3m/tiny-voca)): the
+Q8_0-quantized tiny-voca model plus its phonemizer dictionary and tables in
+one file. This file is **model data licensed under the Apache License 2.0**
+and is *not* covered by the project's MIT license; its terms are stated in
+`vendor/LICENSE-tiny-voca`.

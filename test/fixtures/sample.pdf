@@ -1,0 +1,66 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 6 0 R >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 7 0 R >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+6 0 obj
+<< /Length 313 >>
+stream
+BT
+/F1 12 Tf
+72 700 Td
+(Reading PDF documents locally keeps private text private.) Tj
+0 -14 Td
+(Extraction runs in the browser so nothing is uploaded anywhere.) Tj
+0 -28 Td
+(Every page yields text in its natural reading order for speech.) Tj
+0 -14 Td
+(Paragraph boundaries are preserved for natural pauses.) Tj
+ET
+endstream
+endobj
+7 0 obj
+<< /Length 243 >>
+stream
+BT
+/F1 12 Tf
+72 700 Td
+(The second page continues the sample document with more sentences.) Tj
+0 -14 Td
+(The reader walks each block in order and speaks it aloud.) Tj
+0 -28 Td
+(Validation confirms that both pages are extracted in order.) Tj
+ET
+endstream
+endobj
+8 0 obj
+<< /Title (Sample PDF Fixture) /Producer (tiny-voca-reader test fixture) /Creator (tiny-voca-reader) >>
+endobj
+xref
+0 9
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000127 00000 n 
+0000000253 00000 n 
+0000000379 00000 n 
+0000000476 00000 n 
+0000000840 00000 n 
+0000001134 00000 n 
+trailer
+<< /Size 9 /Root 1 0 R /Info 8 0 R >>
+startxref
+1253
+%%EOF

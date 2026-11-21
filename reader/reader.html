@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>tiny reader</title>
+  <link rel="stylesheet" href="reader.css">
+</head>
+<body>
+  <header>
+    <img src="../icons/icon.svg" alt="" width="32" height="32">
+    <div>
+      <h1>tiny reader</h1>
+      <p class="muted">Read the web aloud, locally — no cloud.</p>
+    </div>
+  </header>
+
+  <main>
+    <section id="sources" aria-labelledby="sourcesHeading">
+      <h2 id="sourcesHeading">Read something</h2>
+
+      <div class="field">
+        <label for="pasteText">Paste text <span class="muted">(Ctrl+Enter reads it)</span></label>
+        <textarea id="pasteText" rows="8" spellcheck="false"
+          placeholder="Paste or type English text here, then press Read."></textarea>
+        <button id="readPaste" class="primary" type="button">Read pasted text</button>
+      </div>
+
+      <div class="field">
+        <label for="urlInput">Web page URL</label>
+        <div class="row">
+          <input id="urlInput" type="url" inputmode="url" placeholder="https://example.com/article">
+          <button id="readUrl" type="button">Read page</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="fileInput">Open a file <span class="muted">(txt, html, pdf or epub)</span></label>
+        <input id="fileInput" type="file"
+          accept=".txt,.html,.htm,.pdf,.epub,text/plain,text/html,application/pdf,application/epub+zip">
+      </div>
+    </section>
+
+    <section id="transport" aria-label="Playback">
+      <div class="row controls">
+        <button id="prev" type="button" title="Previous sentence" aria-label="Previous sentence">⏮</button>
+        <button id="playPause" class="primary" type="button" aria-label="Pause or resume">⏸ Pause</button>
+        <button id="next" type="button" title="Next sentence" aria-label="Next sentence">⏭</button>
+        <button id="stop" type="button" title="Stop reading" aria-label="Stop">⏹</button>
+        <button id="readAgain" type="button" title="Read the last text again">↺ Read again</button>
+        <button id="saveCurrent" type="button" title="Save the current text to the library">Save to library</button>
+      </div>
+      <p id="progress" class="muted">Nothing is being read.</p>
+      <p id="preview"></p>
+    </section>
+
+    <section id="settings" aria-label="Voice settings">
+      <label for="voice">Voice
+        <select id="voice">
+          <option value="" disabled selected>Loading voices…</option>
+        </select>
+      </label>
+      <label for="speed">Speed
+        <select id="speed">
+          <option value="0.75">0.75×</option>
+          <option value="1" selected>1×</option>
+          <option value="1.25">1.25×</option>
+          <option value="1.5">1.5×</option>
+        </select>
+      </label>
+    </section>
+
+    <p id="status" role="status"></p>
+
+    <section id="library" aria-label="Library"></section>
+    <section id="models" aria-label="Voice model"></section>
+  </main>
+
+  <script src="../vendor/readability.js"></script>
+  <script type="module" src="reader.js"></script>
+</body>
+</html>

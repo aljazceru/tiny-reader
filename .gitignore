@@ -1,0 +1,13 @@
+# Build artifacts
+*.xpi
+*.zip
+web-ext-artifacts/
+
+# Dependencies
+node_modules/
+
+# Test tooling
+coverage/
+
+# OS noise
+.DS_Store
