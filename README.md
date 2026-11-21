@@ -132,7 +132,7 @@ Unit tests and lint (no install step; plain `node --test` covers both the
 CommonJS `.js` and ESM `.mjs` suites):
 
 ```bash
-node --test        # extraction, PDF/ePub, library, preferences, real model synthesis
+node --test        # extraction, PDF/ePub, library, preferences, player, real model synthesis
 npx web-ext lint   # manifest + addon-linter checks
 ```
 

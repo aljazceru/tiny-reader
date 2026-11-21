@@ -40,6 +40,7 @@ const VocaPlayer = (() => {
       buffer.copyToChannel(data, 0);
       const source = ctx.createBufferSource();
       source.buffer = buffer;
+      source.connect(ctx.destination); // unconnected sources run silently
       const start = Math.max(this.cursor, ctx.currentTime + 0.05);
       source.start(start);
       this.cursor = start + buffer.duration;
