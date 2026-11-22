@@ -1,10 +1,11 @@
 # tiny reader
 
-tiny reader is a browser extension that reads selected text, whole pages,
-pasted text, URLs, PDFs and ePubs aloud. Speech is synthesized on your
-machine by the bundled tiny-voca model, or by any OpenAI-compatible TTS
-endpoint you configure. No account, no telemetry, and no network after
-install except for content, models, or endpoints you explicitly fetch.
+tiny reader is a browser extension for Firefox and Chrome that reads
+selected text, whole pages, pasted text, URLs, PDFs and ePubs aloud.
+Speech is synthesized on your machine by the bundled tiny-voca model, or
+by any OpenAI-compatible TTS endpoint you configure. No account, no
+telemetry, and no network after install except for content, models, or
+endpoints you explicitly fetch.
 
 The bundled [tiny-voca](https://github.com/n4ze3m/tiny-voca) model is 8 MB
 (Q8_0 GGUF, 4.5M parameters). The model and its dizione phonemizer run in
@@ -54,6 +55,9 @@ The add-on stays loaded until Firefox restarts. A permanent install needs a
 signed package (see the release checklist); release Firefox refuses
 unsigned add-ons.
 
+First install opens a short welcome page with a "Hear it" button and the
+three ways to read.
+
 ## Chrome / Chromium
 
 The same tree builds for Chrome MV3, where the background is a service
@@ -91,7 +95,8 @@ Local reads stay local: text you read and your preferences never leave the
 machine. The extension makes network requests only when you ask it to: fetching an http(s) URL you paste into the workspace, downloading
 a custom model URL you provide, or — if you configure a remote TTS
 endpoint — sending each sentence to that endpoint (with your API key).
-There is no analytics, no telemetry, and no background upload.
+There is no analytics, no telemetry, and no background upload. The full
+policy is in [PRIVACY.md](PRIVACY.md).
 
 ## Architecture
 
@@ -140,9 +145,10 @@ ports are open. The reading tab (content script or reader workspace) holds a
 | --- | --- |
 | `activeTab` | Read the page you explicitly activate through the toolbar, context menu or shortcut. |
 | `scripting` | Inject the extractor if it is not already present. |
-| `menus` | Selection and page context-menu entries. |
+| `menus` / `contextMenus` | Selection and page context-menu entries. |
 | `storage` | Global and per-site voice/speed preferences, endpoint settings. |
-| `host_permissions: <all_urls>` | Reader-workspace URL extraction and model downloads you explicitly request; content extraction on the page being read. No analytics or background upload. |
+| `offscreen` (Chrome only) | Play audio from an offscreen document; Chrome service workers have no Web Audio. |
+| `optional_host_permissions: <all_urls>` | No site access at install. When a feature fetches another site — a page URL you enter, a model URL you download, a remote endpoint — the extension asks for just that site at that moment. |
 
 Model bytes are stored locally in IndexedDB. Text you read is never
 stored. Firefox **140 or newer** is required by the bundled PDF.js runtime.
