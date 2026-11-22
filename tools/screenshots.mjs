@@ -304,19 +304,7 @@ try {
       throw new Error(`${error.message}; last state: ${JSON.stringify(lastState)}`);
     });
   }
-  try {
-    await readPasteAndWait(60000);
-  } catch (firstError) {
-    /* Back-to-back stop/start reads can leave the job swallowed by a stale
-     * offscreen host (the state then pins at "planning" forever); closing
-     * the document makes the next ensureWorker respawn it fresh. */
-    console.log("  workspace read stalled; resetting the audio host and retrying");
-    const swRetry = await connect(sw.webSocketDebuggerUrl);
-    await swRetry.evaluate("(async()=>{ await stopPlayback(); await EngineHost.closeDocument(); return true; })()");
-    swRetry.close();
-    await delay(1000);
-    await readPasteAndWait(120000);
-  }
+  await readPasteAndWait(90000);
   await delay(900); // preview line + model name settle
   await shot(reader, "3-workspace.png");
   await reader.evaluate("browser.runtime.sendMessage({ type: 'stop' }).catch(() => {}); true");
