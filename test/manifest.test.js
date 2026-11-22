@@ -8,7 +8,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { execFileSync } = require("node:child_process");
-const { readFileSync, existsSync } = require("node:fs");
+const { readFileSync, existsSync, mkdtempSync } = require("node:fs");
+const { tmpdir } = require("node:os");
 const { dirname, join } = require("node:path");
 
 const root = join(__dirname, "..");
@@ -36,8 +37,11 @@ test("every manifest-referenced file exists", () => {
 
 test("no manifest declares content scripts — the reader injects on demand", () => {
   assert.equal(manifest.content_scripts, undefined);
-  execFileSync(process.execPath, [join(root, "tools", "build-chrome.mjs")]);
-  const chrome = JSON.parse(readFileSync(join(root, "dist", "chrome", "manifest.json"), "utf8"));
+  /* Build into a private dir: node --test runs files in parallel and a
+   * shared dist/chrome races with the other build tests. */
+  const out = mkdtempSync(join(tmpdir(), "tiny-reader-chrome-"));
+  execFileSync(process.execPath, [join(root, "tools", "build-chrome.mjs"), "--out", out]);
+  const chrome = JSON.parse(readFileSync(join(out, "manifest.json"), "utf8"));
   assert.equal(chrome.content_scripts, undefined);
   assert.equal(chrome.host_permissions, undefined);
   assert.deepEqual(chrome.optional_host_permissions, ["<all_urls>"]);

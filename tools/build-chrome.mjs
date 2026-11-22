@@ -5,17 +5,24 @@
  * (service worker instead of event page) and PNG icons rendered from
  * icons/icon.svg (Chrome does not accept SVG for action icons).
  *
- *   node tools/build-chrome.mjs
+ *   node tools/build-chrome.mjs [--store] [--out <dir>]
  *   chromium --load-extension=dist/chrome …
+ *
+ * --store writes dist/chrome-store instead: no `key` (the Web Store mints
+ * its own extension id) and no manifest.firefox.json copy.
  */
 
 import { deflateSync } from "node:zlib";
 import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, copyFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const out = join(root, "dist", "chrome");
+
+const args = process.argv.slice(2);
+const store = args.includes("--store");
+const outFlag = args.indexOf("--out");
+const out = outFlag === -1 ? join(root, "dist", store ? "chrome-store" : "chrome") : resolve(args[outFlag + 1]);
 
 /* ---- PNG encoding (RGBA raster → PNG, no dependencies) ---- */
 
@@ -170,22 +177,23 @@ function copyTree(from, to) {
 const sourceManifest = JSON.parse(readFileSync(join(root, "manifest.json"), "utf8"));
 
 const MANIFEST = {
-  /* Fixed public key → stable extension id for automation and the e2e. */
-  key: "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAr6kyJQD6hQ3Ft9jkbCFbAFytxaBw07OVE3BtK8EnV/APs0QeUXwZcvuCgMHIZovbXhxMvQZHyDnR6x3vVT0cTCYjrBqfy0moO6KE+6vpCBjzMPhdlLUXQ/tXFBdCEEPmC8OoqG3IJXndTFjBFft5pPZuO4dcrFooYNVq4Qd+VqWX7C0yuK4R2UGIi/Ri/gZwe+7keliZwHh09P3+SrE/X3q0i/wKL1zFFIH7CC/qxRA9jR3COke7UORIJnb+veaLCzqMQ5V8Sd3TPo5tIwUGODKwb/fk/XiXSpWNsxd/+LjBmPpTuLw0YWCWCmm0D7MDy2WAUaxIQBW0MYpe3T6nDQIDAQAB",
+  /* Fixed public key → stable extension id for automation and the e2e.
+   * Dropped from the store build: the Web Store mints its own id. */
+  ...(store ? {} : { key: "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAr6kyJQD6hQ3Ft9jkbCFbAFytxaBw07OVE3BtK8EnV/APs0QeUXwZcvuCgMHIZovbXhxMvQZHyDnR6x3vVT0cTCYjrBqfy0moO6KE+6vpCBjzMPhdlLUXQ/tXFBdCEEPmC8OoqG3IJXndTFjBFft5pPZuO4dcrFooYNVq4Qd+VqWX7C0yuK4R2UGIi/Ri/gZwe+7keliZwHh09P3+SrE/X3q0i/wKL1zFFIH7CC/qxRA9jR3COke7UORIJnb+veaLCzqMQ5V8Sd3TPo5tIwUGODKwb/fk/XiXSpWNsxd/+LjBmPpTuLw0YWCWCmm0D7MDy2WAUaxIQBW0MYpe3T6nDQIDAQAB" }),
   manifest_version: 3,
   name: "tiny reader",
   version: sourceManifest.version,
   description:
     "tiny reader reads selected text, pages, pasted text, URLs, PDFs and ePubs aloud with a local voice model or your own TTS endpoint. No account.",
   author: "Aljaz Ceru",
-  icons: { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "96": "icons/icon96.png" },
+  icons: { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "96": "icons/icon96.png", "128": "icons/icon128.png" },
   permissions: ["storage", "contextMenus", "scripting", "activeTab", "offscreen"],
   optional_host_permissions: ["<all_urls>"],
   background: { service_worker: "background/chrome-sw.js" },
   action: {
     default_title: "tiny reader",
     default_popup: "popup/popup.html",
-    default_icon: { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "96": "icons/icon96.png" },
+    default_icon: { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "96": "icons/icon96.png", "128": "icons/icon128.png" },
   },
   commands: {
     "toggle-read": {
@@ -198,6 +206,7 @@ const MANIFEST = {
   homepage_url: "https://github.com/aljazceru/tiny-reader",
 };
 
+rmSync(out, { recursive: true, force: true });
 for (const entry of SHARED) {
   const source = join(root, entry);
   if (statSync(source).isDirectory()) copyTree(source, join(out, entry));
@@ -205,9 +214,9 @@ for (const entry of SHARED) {
 }
 
 // Chrome-only bootstrap; Firefox files that reference it stay unused.
-copyFileSync(join(root, "manifest.json"), join(out, "manifest.firefox.json"));
+if (!store) copyFileSync(join(root, "manifest.json"), join(out, "manifest.firefox.json"));
 writeFileSync(join(out, "manifest.json"), JSON.stringify(MANIFEST, null, 2) + "\n");
-for (const size of [16, 32, 48, 96]) writeFileSync(join(out, "icons", `icon${size}.png`), renderIcon(size));
+for (const size of [16, 32, 48, 96, 128]) writeFileSync(join(out, "icons", `icon${size}.png`), renderIcon(size));
 
 // The popup, reader and welcome pages need the shim before their own scripts.
 for (const page of ["popup/popup.html", "reader/reader.html", "welcome/welcome.html"]) {

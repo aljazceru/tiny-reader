@@ -4,10 +4,21 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { inflateSync } from "node:zlib";
 
 const root = new URL("..", import.meta.url);
+const build = new URL("tools/build-chrome.mjs", root).pathname;
+
+/* node --test runs files in parallel; each build gets its own output dir
+ * so concurrent tests can not observe each other's half-written tree. */
+function buildChrome(...args) {
+  const out = mkdtempSync(join(tmpdir(), "tiny-reader-chrome-"));
+  execFileSync(process.execPath, [build, "--out", out, ...args]);
+  return out;
+}
 
 /* Minimal decoder for the build's own PNGs: RGBA, 8-bit, filter 0 rows. */
 function decode(png) {
@@ -24,10 +35,10 @@ function decode(png) {
 }
 
 test("chrome build renders the full speaker icon at every size", () => {
-  execFileSync(process.execPath, [new URL("tools/build-chrome.mjs", root).pathname]);
-  const manifest = JSON.parse(readFileSync(new URL("dist/chrome/manifest.json", root), "utf8"));
+  const out = buildChrome();
+  const manifest = JSON.parse(readFileSync(join(out, "manifest.json"), "utf8"));
   for (const [size, file] of Object.entries(manifest.action.default_icon)) {
-    const image = decode(readFileSync(new URL(`dist/chrome/${file}`, root)));
+    const image = decode(readFileSync(join(out, file)));
     assert.equal(image.width, Number(size), `${file} width`);
     // Speaker body centre (viewBox 35,48) is blue #7aabff.
     const [r, g, b] = image.at(Math.floor((35 / 96) * image.width), Math.floor((48 / 96) * image.height));
@@ -39,10 +50,26 @@ test("chrome build renders the full speaker icon at every size", () => {
 });
 
 test("chrome manifest takes author, version and the shortcut from the Firefox manifest", () => {
-  execFileSync(process.execPath, [new URL("tools/build-chrome.mjs", root).pathname]);
+  const out = buildChrome();
   const firefox = JSON.parse(readFileSync(new URL("manifest.json", root), "utf8"));
-  const chrome = JSON.parse(readFileSync(new URL("dist/chrome/manifest.json", root), "utf8"));
+  const chrome = JSON.parse(readFileSync(join(out, "manifest.json"), "utf8"));
   assert.equal(chrome.author, "Aljaz Ceru");
   assert.equal(chrome.version, firefox.version);
   assert.equal(chrome.commands["toggle-read"].suggested_key.default, "Alt+Shift+S");
+});
+
+test("the store build drops the key, ships a 128 px icon and no Firefox manifest", () => {
+  const out = buildChrome("--store");
+  const manifest = JSON.parse(readFileSync(join(out, "manifest.json"), "utf8"));
+  assert.equal(manifest.key, undefined, "key leaked into the store manifest");
+  assert.equal(manifest.icons["128"], "icons/icon128.png");
+  assert.ok(existsSync(join(out, "icons", "icon128.png")), "icon128.png missing");
+  assert.ok(!existsSync(join(out, "manifest.firefox.json")), "manifest.firefox.json leaked into the store build");
+});
+
+test("the chrome build cleans its output directory", () => {
+  const out = buildChrome();
+  writeFileSync(join(out, "stale.txt"), "stale");
+  execFileSync(process.execPath, [build, "--out", out]);
+  assert.ok(!existsSync(join(out, "stale.txt")), "stale file survived the build");
 });
