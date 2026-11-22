@@ -81,7 +81,9 @@ AudioContext exactly like on Firefox, and no tab ever appears.
 - **Toolbar popup** — selection-first page reading, transport controls,
   voice/speed, and *Open reader workspace*.
 - **Right-click** — *Read selection with tiny reader* / *Read whole page
-  with tiny reader*.
+  with tiny reader*. The selection entry also works inside embedded frames
+  (e.g. a document shown in an iframe), where the text is read without
+  paragraph highlighting.
 - **Keyboard** — `Alt+Shift+S` toggles *Read the selection (or the page)
   aloud / pause*. Rebind it under `about:addons` → gear icon → *Manage
   Extension Shortcuts* (Firefox) or `chrome://extensions/shortcuts` (Chrome).

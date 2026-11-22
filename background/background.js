@@ -617,20 +617,23 @@ function readable(tab) {
 
 async function extract(tab, source) {
   const ask = () => browser.tabs.sendMessage(tab.id, { type: "extract", source });
+  let page;
   try {
-    return await ask(); // already injected on a previous read of this tab
+    page = await ask(); // already injected on a previous read of this tab
   } catch (error) { /* not injected yet */ }
-  try {
-    await browser.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: INJECT_FILES,
-    });
-  } catch (error) {
-    /* Injection is refused on pages the browser protects (gallery pages,
-     * other extensions, some built-ins) — say what to do instead. */
-    throw new Error(UNREADABLE_PAGE);
+  if (!page) {
+    try {
+      await browser.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: INJECT_FILES,
+      });
+    } catch (error) {
+      /* Injection is refused on pages the browser protects (gallery pages,
+       * other extensions, some built-ins) — say what to do instead. */
+      throw new Error(UNREADABLE_PAGE);
+    }
+    page = await ask();
   }
-  const page = await ask();
   if (!page || !Array.isArray(page.blocks)) throw new Error("The page did not answer.");
   if (!page.blocks.length) {
     throw new Error(page.source === "selection"
@@ -673,8 +676,10 @@ async function stopPlayback() {
   badge();
 }
 
-/* Page path: selection or whole page from a normal web tab. */
-async function read(tab, source) {
+/* Page path: selection or whole page from a normal web tab. `menuText` is
+ * the context menu's selectionText: a selection inside a cross-origin
+ * iframe is out of the extractor's reach, so it is read as plain text. */
+async function read(tab, source, menuText = "") {
   await ensureModelLoaded();
   const problem = readable(tab);
   if (problem) return fail(problem);
@@ -689,7 +694,9 @@ async function read(tab, source) {
   try {
     page = await extract(tab, source);
   } catch (error) {
-    return fail(String((error && error.message) || error));
+    const text = typeof menuText === "string" ? menuText.trim() : "";
+    if (!text) return fail(String((error && error.message) || error));
+    page = { title: S.page.title, source: "selection", blocks: [text] };
   }
   prefsCache = await prefsForContext(VocaPrefs.hostFromUrl(S.page.url));
   beginJob({
@@ -942,7 +949,8 @@ browser.runtime.onInstalled.addListener((details) => {
 });
 
 (browser.menus || browser.contextMenus).onClicked.addListener((info, tab) => {
-  read(tab, info.menuItemId === "tv-selection" ? "selection" : "page");
+  if (info.menuItemId === "tv-selection") return read(tab, "selection", info.selectionText);
+  return read(tab, "page");
 });
 
 browser.commands.onCommand.addListener((command) => {

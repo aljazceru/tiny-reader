@@ -161,3 +161,38 @@ test("update drops the old library keys but opens no page", () => {
   assert.equal(h.calls.tabsCreate.length, 0);
   assert.deepEqual(h.calls.storageRemove, [["libraryItems", "queueIds"]]);
 });
+
+/* A selection inside a cross-origin iframe is invisible to the top-frame
+ * extractor (activeTab covers only the tab's own origin), but the context
+ * menu hands over the selected text itself — read that instead. */
+test("right-click reads the menu's selection text when extraction finds none", async () => {
+  const h = loadBackground({
+    sendMessage: (tabId, message) => Promise.resolve(
+      message.type === "extract" ? { title: "Doc", source: "selection", blocks: [] } : null),
+  });
+  const jobs = [];
+  h.sandbox.ensureModelLoaded = () => Promise.resolve();
+  h.sandbox.beginJob = (job) => { jobs.push(JSON.parse(JSON.stringify(job))); };
+  const tab = { id: 3, url: "https://example.com/doc", title: "Doc" };
+  for (const fn of h.listeners.menuClick) {
+    await fn({ menuItemId: "tv-selection", selectionText: "  Text inside a frame.  " }, tab);
+  }
+  assert.equal(jobs.length, 1);
+  assert.deepEqual(jobs[0].blocks, ["Text inside a frame."]);
+  assert.equal(jobs[0].source, "selection");
+  assert.equal(jobs[0].tabId, 3);
+});
+
+/* Regression: an already-injected content script's empty answer skipped the
+ * checks and reached the engine as zero blocks ("Nothing to pronounce
+ * here.") instead of saying nothing was selected. */
+test("an empty answer from an injected page is an error, not an empty job", async () => {
+  const h = loadBackground({
+    sendMessage: () => Promise.resolve({ title: "Doc", source: "selection", blocks: [] }),
+  });
+  await assert.rejects(
+    h.sandbox.extract({ id: 1, url: "https://example.com/" }, "selection"),
+    { message: "No text selected — select the text you want read first." },
+  );
+  assert.equal(h.calls.executeScript.length, 0);
+});

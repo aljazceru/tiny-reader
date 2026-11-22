@@ -51,7 +51,11 @@
     const parts = new Map();
     for (let i = 0; i < selection.rangeCount; i++) {
       const range = selection.getRangeAt(i);
-      const walker = document.createTreeWalker(range.commonAncestorContainer, NodeFilter.SHOW_TEXT, {
+      /* A TreeWalker never yields its root: a selection inside one text
+       * node has that node as the common ancestor, so walk its parent. */
+      const common = range.commonAncestorContainer;
+      const root = common.nodeType === Node.TEXT_NODE ? common.parentNode : common;
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
         acceptNode(node) {
           return range.intersectsNode(node) && node.textContent.trim()
             ? NodeFilter.FILTER_ACCEPT

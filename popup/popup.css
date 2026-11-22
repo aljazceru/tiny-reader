@@ -48,6 +48,10 @@ h1 {
   font-weight: 600;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 #idle,
 #workspace {
   display: grid;
