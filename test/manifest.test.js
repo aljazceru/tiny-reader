@@ -7,6 +7,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { execFileSync } = require("node:child_process");
 const { readFileSync, existsSync } = require("node:fs");
 const { dirname, join } = require("node:path");
 
@@ -29,6 +30,13 @@ test("every manifest-referenced file exists", () => {
     manifest.action.default_icon,
   ];
   for (const file of files) assert.ok(existsSync(join(root, file)), `${file} missing`);
+});
+
+test("no manifest declares content scripts — the reader injects on demand", () => {
+  assert.equal(manifest.content_scripts, undefined);
+  execFileSync(process.execPath, [join(root, "tools", "build-chrome.mjs")]);
+  const chrome = JSON.parse(readFileSync(join(root, "dist", "chrome", "manifest.json"), "utf8"));
+  assert.equal(chrome.content_scripts, undefined);
 });
 
 test("the toggle-read shortcut is registered with a default binding", () => {

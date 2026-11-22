@@ -34,6 +34,11 @@ const PAGE_SOURCES = ["selection", "page"];
 const DIRECT_SOURCES = ["paste", "url", "pdf", "epub", "txt"];
 const BUNDLED_MODEL = { name: "tiny-voca (bundled)", voices: ["M2", "F2"] };
 const WORKER_LOAD_TIMEOUT = 120000; // custom GGUF validation can take a while
+/* Injected on demand into the page being read — nothing ships as a declared
+ * content script, so no install-time "read all sites" warning. compat.js is
+ * a no-op where `browser` already exists (Firefox). */
+const INJECT_FILES = ["compat/compat.js", "vendor/readability.js", "content/content.js"];
+const UNREADABLE_PAGE = "tiny reader can't read this page. Try selecting the text and using the right-click menu, or open it in the reader workspace.";
 
 const S = {
   status: "idle", // idle | loading | planning | playing | paused | done | error
@@ -558,18 +563,28 @@ function readable(tab) {
   if (!tab || !tab.id) return "No tab to read.";
   const url = tab.url || "";
   if (/^(about|chrome|moz-extension|view-source|data):/i.test(url)) return "This kind of page cannot be read.";
+  /* The browsers' own stores refuse injected scripts. */
+  if (/^https:\/\/(chromewebstore\.google\.com|chrome\.google\.com\/webstore|addons\.mozilla\.org)(\/|$)/i.test(url)) {
+    return "This kind of page cannot be read.";
+  }
   return null;
 }
 
 async function extract(tab, source) {
   const ask = () => browser.tabs.sendMessage(tab.id, { type: "extract", source });
   try {
-    return await ask(); // declared content scripts are usually already in place
-  } catch (error) { /* not injected yet (grant raced the page load) */ }
-  await browser.scripting.executeScript({
-    target: { tabId: tab.id },
-    files: ["vendor/readability.js", "content/content.js"],
-  });
+    return await ask(); // already injected on a previous read of this tab
+  } catch (error) { /* not injected yet */ }
+  try {
+    await browser.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: INJECT_FILES,
+    });
+  } catch (error) {
+    /* Injection is refused on pages the browser protects (gallery pages,
+     * other extensions, some built-ins) — say what to do instead. */
+    throw new Error(UNREADABLE_PAGE);
+  }
   const page = await ask();
   if (!page || !Array.isArray(page.blocks)) throw new Error("The page did not answer.");
   if (!page.blocks.length) {

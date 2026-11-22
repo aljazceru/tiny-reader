@@ -176,13 +176,6 @@ const MANIFEST = {
     "tiny reader reads selected text, pages, pasted text, URLs, PDFs and ePubs aloud with a local voice model or your own TTS endpoint. No account.",
   author: "tiny reader contributors",
   icons: { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "96": "icons/icon96.png" },
-  content_scripts: [
-    {
-      matches: ["<all_urls>"],
-      js: ["compat/compat.js", "vendor/readability.js", "content/content.js"],
-      run_at: "document_idle",
-    },
-  ],
   permissions: ["storage", "contextMenus", "scripting", "activeTab", "offscreen"],
   host_permissions: ["<all_urls>"],
   background: { service_worker: "background/chrome-sw.js" },
