@@ -3,8 +3,9 @@
 tiny reader is a local, open-source answer to [ElevenReader](https://elevenreader.io/):
 the reading experience — selected text or whole pages, pasted text, URLs,
 PDFs and ePubs — with speech synthesized on your machine by the bundled
-tiny-voca model. No account, no cloud, no telemetry, and no network after
-install except for content or models you explicitly fetch.
+tiny-voca model, or by any OpenAI-compatible TTS endpoint you configure.
+No account, no telemetry, and no network after install except for content,
+models, or endpoints you explicitly fetch.
 
 The bundled [tiny-voca](https://github.com/n4ze3m/tiny-voca) model is 8 MB
 (Q8_0 GGUF, 4.5M parameters). The model and its dizione phonemizer run in
@@ -27,15 +28,25 @@ plain JavaScript — no ONNX, no WASM, no cloud runtime.
 - **Per-site preferences**: voice and speed changes made during a web-page
   read are remembered for that hostname; direct reader inputs use the global
   defaults.
+- **Speed control everywhere**: 0.5×–2.5× in 0.25 steps from the popup and
+  reader workspace sliders and the mini-player's −/+ buttons, applied to the
+  sentence being synthesized next.
 - **Custom GGUF models**: the workspace's model section accepts a local GGUF
   or an http(s) model URL for other voices, languages, or fine-tunes. Models
   must be tiny-voca GGUFs with the embedded phonemizer; arbitrary GGUFs are
   rejected without replacing the working model. The active model and its
   speakers are validated in a fresh worker, persisted in IndexedDB, and
   restored across sessions.
+- **Remote TTS endpoints**: instead of a local model, point the workspace's
+  model section at an OpenAI-compatible `/audio/speech` endpoint
+  (api.openai.com, Groq, openedai-speech, Kokoro-FastAPI, …). The endpoint
+  is validated with one short request, voices and speed pass through, and
+  the API key stays in local browser storage. Endpoints without CORS
+  headers need the extension's site-access permission granted.
 
-The bundled English model provides M2 (male) and F2 (female), at 24 kHz and
-0.75×–1.5× speed. tiny-voca's English pronunciation has the limits documented
+The bundled English model provides M2 (male) and F2 (female), at 24 kHz;
+speed is adjustable from 0.5× to 2.5× (remote endpoints accept their own
+wider range). tiny-voca's English pronunciation has the limits documented
 upstream, including guesses for foreign names and unusual spellings.
 
 ## Install
@@ -57,12 +68,31 @@ Then in `about:addons`: gear icon → *Install Add-on From File…* and pick the
 built `.zip`/`.xpi`. There is no signing or build step; models and libraries
 are bundled. See the release checklist below for the exact packaging command.
 
+## Chrome / Chromium
+
+The same tree builds for Chrome MV3, where the background is a service
+worker and audio plays through a pinned audio-host tab (Chrome has no event
+pages, and service workers have no Web Audio):
+
+```bash
+node tools/build-chrome.mjs           # → dist/chrome
+chromium --load-extension=dist/chrome # or load unpacked via chrome://extensions
+```
+
+Everything except the audio/engine host is shared verbatim; `compat/compat.js`
+maps `browser` to `chrome` for Chrome pages. Two Chrome-specific behaviors:
+pause stops the current sentence and resume replays it (the audio-host tab
+has no user activation, so a suspended AudioContext could not resume), and
+the pinned audio-host tab appears while anything is being read — closing it
+stops playback.
+
+
 ## Usage
 
 - **Toolbar popup** — selection-first page reading, transport controls,
   voice/speed, and *Open reader workspace*.
-- **Right-click** — *Read selection with tiny-voca* / *Read whole page with
-  tiny-voca*.
+- **Right-click** — *Read selection with tiny reader* / *Read whole page
+  with tiny reader*.
 - **Ctrl+Alt+R** — reads the selection if there is one, else the page;
   pauses and resumes when already reading. Rebind in Firefox's extension
   settings.
@@ -73,37 +103,46 @@ port prevents Firefox from unloading the event page during long reads.
 
 ## Privacy
 
-Everything runs locally in your browser. Text you read, your library, and
-your preferences never leave the machine, and nothing is sent to a TTS
-service. The extension makes network requests only when you ask it to:
-fetching an http(s) URL you paste into the workspace and downloading a
-custom model URL you provide. There is no analytics, no telemetry, and no
-background upload.
+Local reads stay local: text you read, your library, and your preferences
+never leave the machine. The extension makes network requests only when you
+ask it to: fetching an http(s) URL you paste into the workspace, downloading
+a custom model URL you provide, or — if you configure a remote TTS
+endpoint — sending each sentence to that endpoint (with your API key).
+There is no analytics, no telemetry, and no background upload.
 
 ## Architecture
 
 ```
 manifest.json            MV3, non-persistent event page, Firefox 140+
 background/background.js shared job path, runtime APIs, queue, models,
-                         site preferences, popup/menu/command routing
+                         site preferences, popup/menu/command routing,
+                         remote-endpoint synthesis pump
 background/player.js     gapless Web Audio player (pause = context suspend)
+background/engine-host.js worker+player in the page (Firefox) or in the
+                         Chrome audio-host tab, behind one interface
+background/chrome-sw.js  Chrome service worker bootstrap (importScripts)
 engine/engine-worker.mjs module worker: model loading/validation, sentence
                          planning, flow-controlled synthesis
 content/content.js       selection/page extraction, highlight, keepalive,
                          floating mini-player
 reader/                  full-page workspace, URL/HTML/PDF/ePub extraction,
                          library and model management
-logic/                   pure resampling, library and preference helpers
+logic/                   pure resampling, remote-TTS helpers, library,
+                         model store, preference helpers
+chrome/audio-host.*    Chrome audio-host tab (engine worker + player)
+compat/compat.js         `browser` ← `chrome` shim for Chrome pages
 vendor/                  tiny-voca engine, Readability, PDF.js, fflate
 assets/tiny-voca.gguf    bundled model + phonemizer data
 popup/                   toolbar controller and workspace entry
 test/                    node:test suites and PDF/ePub/article fixtures
 tools/e2e.mjs            page/selection/mini-player browser E2E
 tools/reader-e2e.mjs     workspace/library/model browser E2E
+tools/build-chrome.mjs   dist/chrome build (Chrome manifest + PNG icons)
 tools/fetch-model.mjs    re-download the bundled GGUF
 ```
 
-The worker posts each sentence as a `Float32Array` at 24 kHz. The player
+The worker posts each sentence as a `Float32Array` at 24 kHz (remote
+endpoints: audio decoded from what the server returns). The player
 resamples to the device rate, schedules buffers back-to-back, and reports
 true completion through `onended`. Progress, paragraph highlighting, the
 look-ahead window and queue advancement follow actual audio, not synthesis.
@@ -147,6 +186,7 @@ cd test/fixtures && python3 -m http.server 8123 &
 cd ../.. && python3 -m http.server 8124 &       # extension dir for module E2E
 XPI_PATH=/tmp/e2e/tiny-reader.xpi node tools/e2e.mjs
 XPI_PATH=/tmp/e2e/tiny-reader.xpi node tools/reader-e2e.mjs
+node tools/build-chrome.mjs && node tools/chrome-e2e.mjs   # Chromium, CDP
 ```
 
 Prerequisites: a Firefox binary (`FIREFOX_BIN`), geckodriver
@@ -158,9 +198,15 @@ variables and what is asserted.
 `tools/e2e.mjs` covers page reading, selection, follow-along highlight,
 keepalive, and the floating mini-player. `tools/reader-e2e.mjs` covers paste,
 URL, PDF, ePub, saved-library queue auto-advance, custom model import and
-invalid-model rejection. The harness patches the test-only xpi (documented
-in each script, never shipped) because automation cannot grant `activeTab`
-or execute inside `moz-extension` pages.
+invalid-model rejection. `tools/chrome-e2e.mjs` drives the Chrome build
+through raw CDP (bundled model through the audio-host tab, speed
+slider, pause/resume, and a remote TTS endpoint against a built-in mock
+server; no test hooks, `CHROME_BIN` to override the binary — it runs headed
+because headless Chrome freezes the Web Audio clock, so a `DISPLAY` is
+needed). The Firefox
+harnesses patch the test-only xpi (documented in each script, never
+shipped) because automation cannot grant `activeTab` or execute inside
+`moz-extension` pages.
 
 ## Release checklist
 

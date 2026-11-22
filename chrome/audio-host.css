@@ -1,0 +1,8 @@
+/* The audio-host tab is a quiet, pinned background worker. */
+body {
+  margin: 0;
+  padding: 16px;
+  background: #1e2023;
+  color: #9aa0a6;
+  font: 13px/1.5 system-ui, sans-serif;
+}

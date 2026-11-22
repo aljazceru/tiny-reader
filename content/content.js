@@ -241,6 +241,14 @@
     }
     .card.dragging .head{cursor:grabbing}
     .dot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--muted)}
+    .head button{
+      appearance:none;border:0;background:transparent;color:var(--muted);
+      width:26px;height:26px;border-radius:7px;flex:none;
+      display:inline-flex;align-items:center;justify-content:center;cursor:pointer;
+    }
+    .head button:hover{background:var(--chip);color:var(--fg)}
+    .head button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+    .head button svg{width:14px;height:14px;fill:currentColor;display:block}
     .dot.playing,.dot.done{background:var(--accent)}
     .dot.paused{background:var(--warn)}
     .dot.loading,.dot.planning{background:var(--warn);animation:mp-pulse 1.1s ease-in-out infinite}
@@ -254,21 +262,17 @@
       -webkit-user-select:text;user-select:text;
     }
     .preview.error{color:var(--bad)}
-    .controls{display:flex;align-items:center;gap:2px;padding:7px 8px 9px}
+    .controls{display:flex;align-items:center;gap:4px;padding:7px 8px 9px}
     .controls button{
       appearance:none;border:0;background:transparent;color:var(--fg);
-      width:30px;height:30px;border-radius:8px;
+      width:34px;height:34px;border-radius:8px;flex:none;
       display:inline-flex;align-items:center;justify-content:center;
       cursor:pointer;transition:background-color .15s ease;
     }
-    .controls button:hover{background:var(--chip)}
-    .controls button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-    .controls button:disabled{opacity:.35;cursor:default;background:transparent}
-    .controls button svg{width:16px;height:16px;fill:currentColor;display:block}
-    .controls .pause{background:var(--chip)}
-    .controls .pause:hover{background:var(--line)}
-    .controls .pause:disabled{background:transparent}
-    .controls .stop:hover{background:rgba(179,38,30,.18)}
+    .rate{
+      min-width:34px;text-align:center;font-size:12px;font-weight:600;
+      color:var(--fg);font-variant-numeric:tabular-nums;user-select:none;
+    }
     .queue{
       margin-left:auto;padding:2px 9px;border-radius:999px;
       background:var(--chip);color:var(--muted);font-size:11px;white-space:nowrap;
@@ -290,7 +294,7 @@
     }
   `;
   const MP_MARKUP = `
-    <div class="card" role="region" aria-label="tiny-voca mini player">
+    <div class="card" role="region" aria-label="tiny reader mini player">
       <div class="head">
         <span class="dot" data-role="dot"></span>
         <span class="status" data-role="status">Reading</span>
@@ -304,6 +308,9 @@
         <button class="pause" data-action="pause" aria-label="Pause" disabled>${MP_ICONS.pause}</button>
         <button data-action="next" aria-label="Next sentence" disabled>${MP_ICONS.next}</button>
         <button class="stop" data-action="stop" aria-label="Stop">${MP_ICONS.stop}</button>
+        <button data-action="slower" aria-label="Slower">−</button>
+        <span class="rate" data-role="rate" title="Playback speed">1×</span>
+        <button data-action="faster" aria-label="Faster">+</button>
         <span class="queue" data-role="queue" hidden></span>
       </div>
       <div class="track" data-role="progress" role="progressbar" aria-label="Reading progress"
@@ -345,6 +352,7 @@
       next: root.querySelector('[data-action="next"]'),
       collapse: root.querySelector('[data-action="collapse"]'),
       queue: root.querySelector('[data-role="queue"]'),
+      rate: root.querySelector('[data-role="rate"]'),
     };
 
     mini = { host, root, refs, status: "planning", timer: 0 };
@@ -357,6 +365,13 @@
       else if (action === "next") mpSend({ type: "next" });
       else if (action === "pause") mpSend({ type: mini && mini.status === "playing" ? "pause" : "resume" });
       else if (action === "stop") { mpSend({ type: "stop" }); mpClose(); }
+      else if (action === "slower" || action === "faster") {
+        const current = typeof mini.speed === "number" ? mini.speed : 1;
+        const speed = Math.round(mpClamp(current + (action === "faster" ? 0.25 : -0.25), 0.5, 2.5) * 100) / 100;
+        mini.speed = speed;
+        refs.rate.textContent = `${speed}×`;
+        mpSend({ type: "setPrefs", patch: { speed } });
+      }
       else if (action === "close") mpClose();
       else if (action === "collapse") mpToggleCollapse();
     });
@@ -415,6 +430,10 @@
     const index = typeof data.index === "number" ? data.index : -1;
     const error = status === "error" ? String(data.error || "Something went wrong.") : "";
     mini.status = status;
+    if (data.prefs && typeof data.prefs.speed === "number") {
+      mini.speed = data.prefs.speed;
+      mini.refs.rate.textContent = `${data.prefs.speed}×`;
+    }
 
     mini.refs.dot.className = `dot ${status}`;
     mini.refs.status.textContent = MP_STATUS[status] || "Reading";

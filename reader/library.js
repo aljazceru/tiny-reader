@@ -65,7 +65,7 @@ const STYLE = `
 .tv-lib-queue-info{font-size:.85em;opacity:.75;}
 .tv-lib-btn{padding:2px 10px;}
 .tv-lib-btn:disabled{opacity:.45;}
-.tv-lib-danger:hover{color:#b3261e;}
+.tv-lib-danger:hover{color:var(--error,#b3261e);}
 .tv-lib-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;}
 .tv-lib-item{display:flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid rgba(128,128,128,.35);border-radius:8px;}
 .tv-lib-order{font-size:.8em;opacity:.7;min-width:2.2em;text-align:right;}

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "tiny reader",
   "version": "1.0.0",
-  "description": "tiny reader reads selected text, pages, pasted text, URLs, PDFs and ePubs aloud with the local tiny-voca speech model. No cloud, no account.",
+  "description": "tiny reader reads selected text, pages, pasted text, URLs, PDFs and ePubs aloud with a local voice model or your own TTS endpoint. No account.",
   "author": "tiny reader contributors",
   "browser_specific_settings": {
     "gecko": {
@@ -38,9 +38,11 @@
   "background": {
     "scripts": [
       "logic/resample.js",
-      "logic/library.js",
+      "logic/chunks.js",
+      "logic/remote.js",
       "logic/model-store.js",
       "logic/prefs.js",
+      "background/engine-host.js",
       "background/player.js",
       "background/background.js"
     ]
@@ -58,5 +60,5 @@
       "description": "Read the selection (or the page) aloud / pause"
     }
   },
-  "homepage_url": "https://github.com/n4ze3m/tiny-voca"
+  "homepage_url": "https://github.com/aljazceru/tiny-reader"
 }

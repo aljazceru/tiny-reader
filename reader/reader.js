@@ -21,7 +21,11 @@ import { blocksFromText, extractHtml, extractUrl } from "./extract.js";
 
 const $ = (id) => document.getElementById(id);
 const POLL_MS = 400;
-const NOTICE_MS = 6000; // how long a local notice survives the next polls
+
+const ICONS = {
+  play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 4.8 19 12 7.5 19.2z"/></svg>',
+  pause: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 5h3.4v14H6.5zM14.1 5h3.4v14h-3.4z"/></svg>',
+};
 const BUSY = ["loading", "planning", "playing", "paused"];
 
 const STATUS_TEXT = {
@@ -196,6 +200,9 @@ $("saveCurrent").addEventListener("click", async () => {
 });
 
 $("voice").addEventListener("change", () => send({ type: "setPrefs", patch: { voice: $("voice").value } }));
+$("speed").addEventListener("input", () => {
+  $("speedValue").textContent = speedLabel(Number($("speed").value));
+});
 $("speed").addEventListener("change", () => send({ type: "setPrefs", patch: { speed: Number($("speed").value) } }));
 
 /* ------------------------------------------------------------ keepalive */
@@ -250,7 +257,8 @@ function render() {
   const total = state.total || 0;
   const index = typeof state.index === "number" ? state.index : -1;
 
-  $("playPause").textContent = state.status === "paused" ? "▶ Resume" : "⏸ Pause";
+  $("playPause").innerHTML = (state.status === "paused" ? ICONS.play : ICONS.pause)
+    + `<span>${state.status === "paused" ? "Resume" : "Pause"}</span>`;
   $("playPause").disabled = !busy;
   $("stop").disabled = !busy;
   $("prev").disabled = !busy || index <= 0;
@@ -275,6 +283,7 @@ function render() {
 
   renderVoices();
   if (state.prefs && document.activeElement !== $("speed")) $("speed").value = String(state.prefs.speed);
+  $("speedValue").textContent = speedLabel(Number($("speed").value));
   renderStatus();
   setReading(busy);
 }

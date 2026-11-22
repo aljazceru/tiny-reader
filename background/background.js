@@ -27,7 +27,7 @@
 
 "use strict";
 
-/* global VocaPlayer, VocaPrefs, ModelStore */
+/* global VocaPlayer, VocaPrefs, ModelStore, RemoteTts, EngineHost */
 
 const DEFAULT_PREFS = { voice: "M2", speed: 1 };
 const LOOKAHEAD = 12;
@@ -60,10 +60,15 @@ let worker = null;
 let player = null;
 let keepalive = null;
 let sampleRate = 24000;
+let remotePlan = null; // { texts, blockOf } while a remote endpoint job runs
+let remoteCursor = 0;
+let remoteTarget = 0;
+let remotePumping = false;
+let textChunks = null; // cached splitter (logic/chunks.js)
 let globalPrefs = null; // { voice, speed } from storage
 let sitePrefs = {}; // host -> { voice?, speed? }
 let prefsCache = null; // effective prefs for the active context
-let activeModel = null; // persisted descriptor { name, buffer }; null = bundled
+let activeModel = null; // persisted descriptor { name, buffer } | { name, remote }; null = bundled
 let queueLoaded = false;
 
 /* ---------------------------------------------------------------- prefs */
@@ -161,12 +166,10 @@ function badge() {
 
 /* --------------------------------------------------------------- worker */
 
+/* Spawns the synthesis worker: in the background page directly (Firefox),
+ * or in the offscreen audio host (Chrome). */
 function spawnWorker(model) {
-  const instance = new Worker(browser.runtime.getURL("engine/engine-worker.mjs"), { type: "module" });
-  // model undefined → empty load message → the worker falls back to the
-  // bundled GGUF; custom fields (name/buffer/url) go on the top level.
-  instance.postMessage(Object.assign({ type: "load" }, model || {}));
-  return instance;
+  return EngineHost.spawnWorker(browser.runtime.getURL("engine/engine-worker.mjs"), model);
 }
 
 /* One-shot ready/error await for a candidate worker (model validation);
@@ -183,13 +186,13 @@ function workerReady(instance, timeout = WORKER_LOAD_TIMEOUT) {
     const timer = setTimeout(() => done(new Error("Model load timed out.")), timeout);
     function done(error, message) {
       clearTimeout(timer);
-      instance.removeEventListener("message", onMessage);
-      instance.removeEventListener("error", onError);
+      instance.onmessage = null;
+      instance.onerror = null;
       if (error) reject(error);
       else resolve(message);
     }
-    instance.addEventListener("message", onMessage);
-    instance.addEventListener("error", onError);
+    instance.onmessage = onMessage;
+    instance.onerror = onError;
   });
 }
 
@@ -205,9 +208,9 @@ function terminateWorker(instance) {
   instance.terminate();
 }
 
-function ensureWorker() {
+async function ensureWorker() {
   if (worker) return worker;
-  worker = spawnWorker(activeModel ? { name: activeModel.name, buffer: activeModel.buffer } : undefined);
+  worker = await spawnWorker(activeModel ? { name: activeModel.name, buffer: activeModel.buffer } : undefined);
   wireWorker(worker);
   return worker;
 }
@@ -236,6 +239,97 @@ function onWorkerMessage(message) {
   }
 }
 
+/* ------------------------------------------------------------ remote tts */
+
+function isRemoteModel() {
+  return Boolean(activeModel && activeModel.remote);
+}
+
+/* logic/chunks.js is a classic script on every background script list. */
+function loadTextChunks() {
+  return Promise.resolve(TextChunks.of);
+}
+
+/* Plan + pump for a remote endpoint job — the mirror of the worker
+ * contract: sentences are synthesized one at a time up to `remoteTarget`;
+ * sentence-end widens the target exactly like the worker's "advance".
+ * Every await re-checks jobId, so stop/seek cancel in-flight requests. */
+function remotePump() {
+  if (remotePumping || !remotePlan) return;
+  remotePumping = true;
+(async () => {
+    const config = activeModel && activeModel.remote;
+    while (config && remotePlan && remoteCursor < remotePlan.texts.length && remoteCursor < remoteTarget) {
+      const job = jobId;
+      const index = remoteCursor;
+      const request = RemoteTts.speechRequest(config, {
+        text: remotePlan.texts[index],
+        voice: prefsCache ? prefsCache.voice : config.voices[0],
+        speed: prefsCache ? prefsCache.speed : 1,
+      });
+      let response;
+      try {
+        response = await fetch(request.url, request.init);
+      } catch (error) {
+        if (jobId === job) fail(`voice endpoint: ${String((error && error.message) || error)}`);
+        return;
+      }
+      if (jobId !== job) return;
+      if (!response.ok || !RemoteTts.isSpeechResponse(response)) {
+        let detail = "";
+        try { detail = (await response.text()).slice(0, 160); } catch (error) { /* body unreadable */ }
+        if (jobId === job) fail(`voice endpoint: request failed (${response.status}${detail ? `: ${detail}` : ""}).`);
+        return;
+      }
+      const audio = await response.arrayBuffer();
+      if (jobId !== job) return;
+      try {
+        await player.enqueueEncoded(audio, index);
+      } catch (error) {
+        if (jobId === job) fail(`voice endpoint: ${String((error && error.message) || error)}`);
+        return;
+      }
+      if (S.status === "loading" || S.status === "planning") {
+        S.status = "playing";
+        S.playingIndex = index;
+        highlightBlock(remotePlan.blockOf[index]);
+        badge();
+      }
+      remoteCursor++;
+    }
+  })().finally(() => {
+    remotePumping = false;
+    if (remotePlan && remoteTarget > remoteCursor) remotePump();
+  });
+}
+
+/* Remote branch of beginJob: split blocks to endpoint-sized text chunks,
+ * then synthesize the first look-ahead window. */
+async function startRemoteJob(blocks) {
+  const split = await loadTextChunks();
+  const texts = [];
+  const blockOf = [];
+  blocks.forEach((text, id) => {
+    for (const chunk of split(text)) {
+      texts.push(chunk);
+      blockOf.push(id);
+    }
+  });
+  remotePlan = { texts, blockOf };
+  remoteCursor = 0;
+  remoteTarget = 0;
+  S.blockOf = blockOf;
+  S.total = texts.length;
+  if (!S.total) return fail("Nothing to pronounce here.");
+  remoteTarget = LOOKAHEAD;
+  remotePump();
+}
+
+function stopRemoteJob() {
+  remotePlan = null;
+  remoteCursor = 0;
+  remoteTarget = 0;
+}
 /* Adopt a confirmed model (worker "ready"): its name and voices drive the
  * popup and reader UI selects. */
 function applyModel(ready) {
@@ -262,6 +356,10 @@ async function loadStoredModel() {
   try {
     const active = await store.loadActive();
     if (!active || typeof active.name !== "string" || !active.name.trim()) return null;
+    if (active.remote && typeof active.remote === "object") {
+      const config = RemoteTts.normalize(active.remote);
+      return { name: active.name.trim(), remote: config };
+    }
     if (!(active.buffer instanceof ArrayBuffer) || !active.buffer.byteLength) return null;
     return { name: active.name.trim(), buffer: active.buffer };
   } catch (error) {
@@ -271,9 +369,9 @@ async function loadStoredModel() {
 
 async function persistModel(descriptor) {
   const store = modelStore();
-  if (store && typeof store.saveActive === "function") {
-    await store.saveActive({ name: descriptor.name, buffer: descriptor.buffer });
-  }
+  if (!store || typeof store.saveActive !== "function") return;
+  if (descriptor.remote) await store.saveActive({ name: descriptor.name, remote: descriptor.remote });
+  else await store.saveActive({ name: descriptor.name, buffer: descriptor.buffer });
 }
 
 async function clearStoredModel() {
@@ -308,7 +406,18 @@ function swapWorker(candidate, ready) {
   worker = candidate;
   wireWorker(candidate);
   terminateWorker(previous);
+  stopRemoteJob(); // a local model takes over from any remote endpoint
   if (ready) onWorkerMessage(ready); // sampleRate + model name/voices
+}
+
+/* Adopts a confirmed remote endpoint: no worker runs while it is active. */
+function applyRemoteModel(descriptor) {
+  terminateWorker(worker);
+  worker = null;
+  stopRemoteJob();
+  activeModel = descriptor;
+  S.model = { name: descriptor.name, voices: descriptor.remote.voices.slice() };
+  fixVoiceForModel(S.model.voices);
 }
 
 /* setModel: download if needed, validate in a fresh worker, then swap and
@@ -321,12 +430,36 @@ async function setModel(data) {
     /* Back to the bundled model. */
     await clearStoredModel().catch(() => {});
     activeModel = null;
-    const candidate = spawnWorker(undefined);
+    const candidate = await spawnWorker(undefined);
     const ready = await workerReady(candidate).catch((error) => {
       terminateWorker(candidate);
       throw error;
     });
     swapWorker(candidate, ready);
+    await restartJobIfReading();
+    return { name: S.model.name, voices: S.model.voices };
+  }
+  if (input.remote) {
+    /* Validate the endpoint with one short request that must return audio;
+     * only then does it replace the current model. */
+    const config = RemoteTts.normalize(input.remote);
+    const probe = RemoteTts.speechRequest(config, { text: "Ready.", voice: config.voices[0], speed: 1 });
+    let response;
+    try {
+      response = await fetch(probe.url, probe.init);
+    } catch (error) {
+      throw new Error(`Endpoint unreachable: ${String((error && error.message) || error)}`);
+    }
+    if (!response.ok || !RemoteTts.isSpeechResponse(response)) {
+      let detail = "";
+      try { detail = (await response.text()).slice(0, 160); } catch (error) { /* body unreadable */ }
+      throw new Error(`The endpoint did not return audio (${response.status}${detail ? `: ${detail}` : ""}).`);
+    }
+    await response.arrayBuffer().catch(() => {}); // drain the probe body
+    applyRemoteModel({ name: config.name, remote: config });
+    try {
+      await persistModel(activeModel);
+    } catch (error) { /* stays active for this session even if saving failed */ }
     await restartJobIfReading();
     return { name: S.model.name, voices: S.model.voices };
   }
@@ -341,7 +474,7 @@ async function setModel(data) {
 
   /* Validate in a fresh worker: the current worker keeps playing until the
    * new model has proven it loads. */
-  const candidate = spawnWorker({ name, buffer });
+  const candidate = await spawnWorker({ name, buffer });
   let ready;
   try {
     ready = await workerReady(candidate);
@@ -564,6 +697,7 @@ function highlightBlock(blockId) {
 async function stopPlayback() {
   jobId++;
   if (worker) worker.postMessage({ type: "cancel" });
+  stopRemoteJob();
   if (player) player.stopSources();
   await toTab({ type: "clearHighlight" });
   toTab({ type: "reading", on: false });
@@ -612,7 +746,7 @@ async function read(tab, source) {
 /* One job path for every input: page reads (selection/page), direct reader
  * inputs (paste/url/pdf/epub/txt) and saved library items. The caller has
  * already stopped any previous job and set the effective prefs. */
-function beginJob({ title, url, blocks, source, tabId = null, itemId = null }) {
+async function beginJob({ title, url, blocks, source, tabId = null, itemId = null }) {
   S.tabId = typeof tabId === "number" ? tabId : null;
   S.page = { title: title || "", url: url || "" };
   S.source = source;
@@ -625,18 +759,23 @@ function beginJob({ title, url, blocks, source, tabId = null, itemId = null }) {
   S.error = null;
   badge();
 
-  ensureWorker();
-  if (!player) player = new VocaPlayer();
+  if (!isRemoteModel()) await ensureWorker();
+  if (!player) player = EngineHost.createPlayer();
   player.onEnded = onSentenceEnded;
   player.stopSources();
   jobId++;
-  worker.postMessage({
-    type: "job",
-    jobId,
-    blocks: blocks.map((text, id) => ({ id, text })),
-    voice: prefsCache.voice,
-    speed: prefsCache.speed,
-  });
+  stopRemoteJob();
+  if (isRemoteModel()) {
+    startRemoteJob(blocks);
+  } else {
+    worker.postMessage({
+      type: "job",
+      jobId,
+      blocks: blocks.map((text, id) => ({ id, text })),
+      voice: prefsCache.voice,
+      speed: prefsCache.speed,
+    });
+  }
   toTab({ type: "reading", on: true });
 }
 
@@ -664,17 +803,26 @@ async function readBlocks(data, sender) {
   return { ok: true, source, blocks: blocks.length, characters };
 }
 
-/* Jump to an utterance index, reusing the worker's plan; voice and speed
- * changes take effect from the jump point. */
+/* Jump to an utterance index, reusing the worker's plan (or the remote
+ * endpoint's chunk list); voice and speed changes take effect from the
+ * jump point. */
 function seek(index) {
-  if (!worker || !player || !S.total) return;
+  if (!player || !S.total) return;
+  if (!isRemoteModel() && !worker) return;
   if (index >= S.total) return finish();
   jobId++;
-  worker.postMessage({ type: "cancel" });
   player.stopSources();
   S.playingIndex = index;
   S.status = "playing";
   badge();
+  if (isRemoteModel()) {
+    remoteCursor = index;
+    remoteTarget = index + LOOKAHEAD;
+    highlightBlock(S.blockOf[index]);
+    remotePump();
+    return;
+  }
+  worker.postMessage({ type: "cancel" });
   const settings = prefsCache;
   worker.postMessage({ type: "replay", jobId, from: index, voice: settings.voice, speed: settings.speed });
   worker.postMessage({ type: "advance", jobId, to: index + LOOKAHEAD });
@@ -687,12 +835,18 @@ function onSentenceEnded(tag) {
   if (next >= S.total) return finish();
   S.playingIndex = next;
   highlightBlock(S.blockOf[next]);
+  if (isRemoteModel()) {
+    remoteTarget = next + LOOKAHEAD;
+    remotePump();
+    return;
+  }
   worker.postMessage({ type: "advance", jobId, to: next + LOOKAHEAD });
 }
 
 async function finish() {
   jobId++;
   if (worker) worker.postMessage({ type: "cancel" });
+  stopRemoteJob();
   if (player) player.stopSources();
   S.status = "done";
   badge();
@@ -737,6 +891,12 @@ async function pause() {
 
 async function resume() {
   if (S.status !== "paused" || !player) return;
+  if (EngineHost.offscreen) {
+    /* Chrome's audio-host tab has no user activation, so a suspended
+     * AudioContext cannot resume there; replay the current sentence
+     * instead (the context itself keeps running). */
+    return seek(Math.max(0, S.playingIndex));
+  }
   await player.resume();
   S.status = "playing";
   badge();
@@ -846,11 +1006,13 @@ browser.runtime.onMessage.addListener((message, sender) => {
 /* ------------------------------------------------------- entry points */
 
 browser.runtime.onInstalled.addListener(() => {
-  browser.menus.create({ id: "tv-selection", title: "Read selection with tiny-voca", contexts: ["selection"] });
-  browser.menus.create({ id: "tv-page", title: "Read whole page with tiny-voca", contexts: ["page"] });
+  /* Firefox exposes both namespaces; Chrome only contextMenus. */
+  const menus = browser.menus || browser.contextMenus;
+  menus.create({ id: "tv-selection", title: "Read selection with tiny reader", contexts: ["selection"] });
+  menus.create({ id: "tv-page", title: "Read whole page with tiny reader", contexts: ["page"] });
 });
 
-browser.menus.onClicked.addListener((info, tab) => {
+(browser.menus || browser.contextMenus).onClicked.addListener((info, tab) => {
   read(tab, info.menuItemId === "tv-selection" ? "selection" : "page");
 });
 
@@ -874,6 +1036,11 @@ const modelStartup = (async () => {
   prefsCache = effectivePrefs(currentPageHost());
   await ensureQueue();
   activeModel = await loadStoredModel();
+  if (activeModel && activeModel.remote) {
+    S.model = { name: activeModel.name, voices: activeModel.remote.voices.slice() };
+    fixVoiceForModel(S.model.voices);
+    return; // no worker while a remote endpoint is active
+  }
   S.model = activeModel
     ? { name: activeModel.name, voices: [] }
     : { name: BUNDLED_MODEL.name, voices: BUNDLED_MODEL.voices.slice() };

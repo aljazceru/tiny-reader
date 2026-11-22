@@ -15,6 +15,19 @@
 
 /* global Resample */
 
+/* Channel-averaged mono mixdown of a decoded AudioBuffer. */
+function mixToMono(buffer) {
+  const channels = buffer.numberOfChannels;
+  if (channels === 1) return buffer.getChannelData(0).slice();
+  const length = buffer.length;
+  const mono = new Float32Array(length);
+  for (let c = 0; c < channels; c++) {
+    const data = buffer.getChannelData(c);
+    for (let i = 0; i < length; i++) mono[i] += data[i] / channels;
+  }
+  return mono;
+}
+
 const VocaPlayer = (() => {
   class VocaPlayer {
     constructor() {
@@ -30,6 +43,15 @@ const VocaPlayer = (() => {
       this.ctx = new AudioContext();
       if (this.ctx.state === "suspended") this.ctx.resume().catch(() => {});
       return this.ctx;
+    }
+
+    /* Schedules one sentence from encoded audio (wav/mp3/… from a remote
+     * TTS endpoint): decoded here, mixed to mono, then enqueued like a
+     * local chunk at the file's own sample rate. */
+    async enqueueEncoded(arrayBuffer, tag) {
+      const ctx = this.ensureContext();
+      const decoded = await ctx.decodeAudioData(arrayBuffer);
+      return this.enqueue(mixToMono(decoded), decoded.sampleRate, tag);
     }
 
     /* Schedules one sentence; returns the AudioContext time it starts at. */

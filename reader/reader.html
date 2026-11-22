@@ -11,7 +11,7 @@
     <img src="../icons/icon.svg" alt="" width="32" height="32">
     <div>
       <h1>tiny reader</h1>
-      <p class="muted">Read the web aloud, locally — no cloud.</p>
+      <p class="muted">Read the web aloud — locally, or via your own TTS endpoint.</p>
     </div>
   </header>
 
@@ -43,11 +43,11 @@
 
     <section id="transport" aria-label="Playback">
       <div class="row controls">
-        <button id="prev" type="button" title="Previous sentence" aria-label="Previous sentence">⏮</button>
-        <button id="playPause" class="primary" type="button" aria-label="Pause or resume">⏸ Pause</button>
-        <button id="next" type="button" title="Next sentence" aria-label="Next sentence">⏭</button>
-        <button id="stop" type="button" title="Stop reading" aria-label="Stop">⏹</button>
-        <button id="readAgain" type="button" title="Read the last text again">↺ Read again</button>
+        <button id="prev" class="icon" type="button" title="Previous sentence" aria-label="Previous sentence"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h2.2v14H6zM20 5.6v12.8L9.8 12z"/></svg></button>
+        <button id="playPause" class="primary" type="button" aria-label="Pause or resume"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 5h3.4v14H6.5zM14.1 5h3.4v14h-3.4z"/></svg><span>Pause</span></button>
+        <button id="next" class="icon" type="button" title="Next sentence" aria-label="Next sentence"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.8 5H18v14h-2.2zM4 5.6v12.8L14.2 12z"/></svg></button>
+        <button id="stop" class="icon" type="button" title="Stop reading" aria-label="Stop"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button>
+        <button id="readAgain" type="button" title="Read the last text again"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5a7 7 0 1 1-6.3 4H3.2L7 4.8 10.8 9H8a5 5 0 1 0 4-2z"/></svg> Read again</button>
         <button id="saveCurrent" type="button" title="Save the current text to the library">Save to library</button>
       </div>
       <p id="progress" class="muted">Nothing is being read.</p>
@@ -61,12 +61,10 @@
         </select>
       </label>
       <label for="speed">Speed
-        <select id="speed">
-          <option value="0.75">0.75×</option>
-          <option value="1" selected>1×</option>
-          <option value="1.25">1.25×</option>
-          <option value="1.5">1.5×</option>
-        </select>
+        <span class="slider-row">
+          <input id="speed" type="range" min="0.5" max="2.5" step="0.25" value="1">
+          <output id="speedValue" for="speed">1×</output>
+        </span>
       </label>
     </section>
 

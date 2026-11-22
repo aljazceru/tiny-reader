@@ -39,7 +39,9 @@ function suggestName(fileNameOrUrl) {
 const megabytes = (bytes) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 
 export function mountModels(root, hooks = {}) {
-  const runtime = globalThis.browser || globalThis.chrome;
+  /* Resolved per call: Chrome can redefine the browser namespace after
+   * module load, which orphans captured references. */
+  const runtime = { sendMessage: (message) => (globalThis.browser || globalThis.chrome).runtime.sendMessage(message) };
   const say = (text, bad = false) => {
     status.textContent = text;
     status.classList.toggle("tv-model-error", bad);
@@ -57,6 +59,26 @@ export function mountModels(root, hooks = {}) {
   const nameLabel = el("label", { class: "tv-model-row" }, "Name");
   const name = el("input", { id: "modelName", type: "text", placeholder: "my-model", spellcheck: "false" });
   nameLabel.append(name);
+  const endpointHead = el("h2", { text: "Remote TTS endpoint" });
+  const endpointNote = el("p", { class: "tv-model-note" },
+    "Use an OpenAI-compatible /audio/speech endpoint instead of a local model. ",
+    "Text and your API key (stored locally in this browser only) go to that server when reading.");
+  const remoteNameLabel = el("label", { class: "tv-model-row" }, "Name");
+  const remoteName = el("input", { id: "remoteName", type: "text", placeholder: "my-openai", spellcheck: "false" });
+  remoteNameLabel.append(remoteName);
+  const remoteUrlLabel = el("label", { class: "tv-model-row" }, "Endpoint URL");
+  const remoteUrl = el("input", { id: "remoteUrl", type: "url", placeholder: "https://api.openai.com/v1/audio/speech", spellcheck: "false" });
+  remoteUrlLabel.append(remoteUrl);
+  const remoteKeyLabel = el("label", { class: "tv-model-row" }, "API key (optional)");
+  const remoteKey = el("input", { id: "remoteKey", type: "password", placeholder: "sk-…", autocomplete: "off" });
+  remoteKeyLabel.append(remoteKey);
+  const remoteModelLabel = el("label", { class: "tv-model-row" }, "Model id (optional)");
+  const remoteModel = el("input", { id: "remoteModel", type: "text", placeholder: "gpt-4o-mini-tts", spellcheck: "false" });
+  remoteModelLabel.append(remoteModel);
+  const remoteVoicesLabel = el("label", { class: "tv-model-row" }, "Voices (comma-separated)");
+  const remoteVoices = el("input", { id: "remoteVoices", type: "text", placeholder: "alloy, echo, fable, onyx, nova, shimmer", spellcheck: "false" });
+  remoteVoicesLabel.append(remoteVoices);
+  const applyRemote = el("button", { id: "applyRemote", type: "button", text: "Use this endpoint" });
   const fileLabel = el("label", { class: "tv-model-row" }, "GGUF file");
   const file = el("input", { id: "modelFile", type: "file", accept: ".gguf" });
   fileLabel.append(file);
@@ -71,13 +93,15 @@ export function mountModels(root, hooks = {}) {
     community.append(el("a", { href: link.url, target: "_blank", rel: "noreferrer", text: link.name }));
   });
   const style = el("style", { text: `
-    .tv-models .tv-model-row { display: block; margin: 0.5rem 0; }
-    .tv-models input[type="text"], .tv-models input[type="url"] { width: min(100%, 34rem); box-sizing: border-box; }
-    .tv-models .tv-model-note, .tv-models .tv-model-status { font-size: 0.85rem; color: #555; }
-    .tv-models .tv-model-error { color: #b3261e; }
+    .tv-models h2 { margin: 0 0 12px; }
+    .tv-models h2:not(:first-child) { margin-top: 1.8rem; }
+    .tv-models input[type="text"], .tv-models input[type="url"], .tv-models input[type="password"] { width: min(100%, 34rem); box-sizing: border-box; }
+    .tv-models .tv-model-note, .tv-models .tv-model-status { font-size: 0.85rem; color: var(--muted, #555); }
+    .tv-models .tv-model-error { color: var(--error, #b3261e); }
   ` });
 
-  const section = el("div", { class: "tv-models" }, style, head, activeModel, explain, nameLabel, fileLabel, urlLabel, apply, status, community);
+  const section = el("div", { class: "tv-models" }, style, head, activeModel, explain, nameLabel, fileLabel, urlLabel, apply, status, community,
+    endpointHead, endpointNote, remoteNameLabel, remoteUrlLabel, remoteKeyLabel, remoteModelLabel, remoteVoicesLabel, applyRemote);
   root.append(section);
 
   // The GGUF staged by the file picker, sent as bytes on apply.
@@ -155,6 +179,35 @@ export function mountModels(root, hooks = {}) {
       file.disabled = false;
     }
   });
-
+  applyRemote.addEventListener("click", async () => {
+    if (!runtime) {
+      say("The model manager only works inside the extension.", true);
+      return;
+    }
+    const voices = remoteVoices.value.split(",").map((voice) => voice.trim()).filter(Boolean);
+    const remote = {
+      name: remoteName.value.trim(),
+      url: remoteUrl.value.trim(),
+      apiKey: remoteKey.value.trim(),
+      model: remoteModel.value.trim(),
+      voices: voices.length ? voices : undefined,
+    };
+    if (!remote.url) {
+      say("Paste the endpoint URL first.", true);
+      return;
+    }
+    applyRemote.disabled = true;
+    say(`Checking "${remote.name || remoteUrl}"…`);
+    try {
+      const active = await runtime.sendMessage({ type: "setModel", remote });
+      say(`✓ "${active.name}" is now the active endpoint (voices: ${active.voices.join(", ")}).`);
+      await refresh();
+      if (hooks.onChanged) hooks.onChanged();
+    } catch (error) {
+      say(`Endpoint rejected: ${String((error && error.message) || error)}`, true);
+    } finally {
+      applyRemote.disabled = false;
+    }
+  });
   refresh();
 }

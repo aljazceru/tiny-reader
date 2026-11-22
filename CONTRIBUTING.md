@@ -13,8 +13,9 @@ test suites and tools.
 ```bash
 git clone <your fork>
 cd tiny-reader
-node --test        # unit tests (extraction, PDF/ePub, library, prefs, player, model)
+node --test        # unit tests (extraction, PDF/ePub, library, prefs, player, remote TTS, model)
 npx web-ext lint   # manifest + addon-linter checks
+node tools/build-chrome.mjs   # optional: dist/chrome build for Chromium
 ```
 
 To try it by hand: `about:debugging#/runtime/this-firefox` → *Load Temporary
@@ -50,5 +51,6 @@ test-only xpi patches it applies (never shipped).
 - Never modify vendored files (`vendor/`, `assets/tiny-voca.gguf`). If an
   upgrade is genuinely needed, propose it separately and update
   `vendor/README.md`, `NOTICE`, and the README attribution together.
-- Keep the extension fully local: no telemetry, no third-party requests
-  beyond user-requested URL/model fetches.
+- Keep reads local by default: no telemetry, no third-party requests beyond
+  user-requested URL/model fetches and the remote TTS endpoint the user
+  explicitly configures.

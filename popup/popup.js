@@ -12,6 +12,12 @@
 
 const $ = (id) => document.getElementById(id);
 
+const speedLabel = (value) => `${Number(value)}×`;
+
+const ICONS = {
+  play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 4.8 19 12 7.5 19.2z"/></svg>',
+  pause: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 5h3.4v14H6.5zM14.1 5h3.4v14h-3.4z"/></svg>',
+};
 const STATUS_TEXT = {
   loading: "Loading the voice model…",
   planning: "Preparing the text…",
@@ -45,10 +51,11 @@ function render() {
   $("readSelection").disabled = !hasSelection;
   $("readSelection").textContent = hasSelection ? "Read selection" : "Nothing selected";
   $("selectionHint").textContent = hasSelection
-    ? "Your selection will be read exactly."
-    : "Select text on the page to read just that, or read the whole page.";
+    ? "Only the selection will be read."
+    : "Select text on the page first — only the selection is read, or read the whole page.";
 
-  $("playPause").textContent = state.status === "paused" ? "▶ Resume" : "⏸ Pause";
+  $("playPause").innerHTML = (state.status === "paused" ? ICONS.play : ICONS.pause)
+    + `<span>${state.status === "paused" ? "Resume" : "Pause"}</span>`;
   const progress = state.total
     ? `Sentence ${Math.min(state.index + 1, state.total)} of ${state.total}${state.source === "selection" ? " · selection" : ""}`
     : "Preparing…";
@@ -68,6 +75,7 @@ function render() {
       voice.value = prefs.voice;
     }
     if (document.activeElement !== $("speed")) $("speed").value = String(prefs.speed);
+    $("speedValue").textContent = speedLabel(Number($("speed").value));
   }
 }
 
@@ -101,7 +109,9 @@ $("playPause").addEventListener("click", () => send({ type: state.status === "pa
 $("stop").addEventListener("click", () => send({ type: "stop" }));
 $("next").addEventListener("click", () => send({ type: "next" }));
 $("prev").addEventListener("click", () => send({ type: "prev" }));
-$("voice").addEventListener("change", () => send({ type: "setPrefs", patch: { voice: $("voice").value } }));
+$("speed").addEventListener("input", () => {
+  $("speedValue").textContent = speedLabel(Number($("speed").value));
+});
 $("speed").addEventListener("change", () => send({ type: "setPrefs", patch: { speed: Number($("speed").value) } }));
 $("openReader").addEventListener("click", () => {
   browser.runtime.sendMessage({ type: "openReader" }).then(() => window.close()).catch(() => {});

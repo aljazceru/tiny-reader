@@ -11,7 +11,9 @@
   --fg: #1c1e21;
   --muted: #6b7075;
   --border: #d3d7dd;
-  --accent: #2b7de9;
+  --accent: #1a68d1;
+  --on-accent: #ffffff;
+  --ring: rgba(26, 104, 209, 0.25);
   --error: #b3261e;
 }
 
@@ -24,6 +26,8 @@
     --muted: #9aa0a6;
     --border: #3c4043;
     --accent: #7aabff;
+    --on-accent: #10131a;
+    --ring: rgba(122, 171, 255, 0.3);
     --error: #f28b82;
   }
 }
@@ -54,8 +58,9 @@ header img {
 
 h1 {
   margin: 0;
-  font-size: 19px;
-  font-weight: 650;
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 header p {
@@ -87,6 +92,12 @@ section {
   padding: 16px;
 }
 
+@media (prefers-color-scheme: light) {
+  section {
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+  }
+}
+
 .field {
   margin-bottom: 16px;
 }
@@ -111,6 +122,25 @@ input[type="url"] {
   background: var(--field);
   color: var(--fg);
   font: inherit;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+textarea:hover,
+input[type="url"]:hover,
+select:hover {
+  border-color: var(--accent);
+}
+
+textarea:focus,
+input[type="url"]:focus,
+select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+input[type="url"]:user-invalid {
+  border-color: var(--error);
 }
 
 textarea {
@@ -125,6 +155,15 @@ input[type="file"] {
   border: 1px dashed var(--border);
   border-radius: 7px;
   color: var(--muted);
+}
+
+input[type="file"]:hover {
+  border-color: var(--accent);
+  color: var(--fg);
+}
+
+input[type="file"]::file-selector-button:hover {
+  border-color: var(--accent);
 }
 
 input[type="file"]::file-selector-button {
@@ -155,13 +194,11 @@ button:hover:not(:disabled) {
 button.primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
-@media (prefers-color-scheme: dark) {
-  button.primary {
-    color: #101418;
-  }
+button.primary:hover:not(:disabled) {
+  filter: brightness(1.07);
 }
 
 button:disabled {
@@ -183,6 +220,33 @@ button:disabled {
 
 .controls button {
   min-width: 44px;
+}
+
+#transport {
+  position: sticky;
+  top: 12px;
+  z-index: 2;
+}
+
+@media (prefers-color-scheme: light) {
+  #transport {
+    box-shadow: 0 2px 10px rgba(16, 24, 40, 0.07);
+  }
+}
+
+.controls button.icon {
+  width: 44px;
+  min-width: 44px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.controls button.icon svg {
+  width: 17px;
+  height: 17px;
+  fill: currentColor;
 }
 
 .controls #playPause {
@@ -224,6 +288,7 @@ select {
 
 #progress {
   margin: 12px 0 0;
+  font-variant-numeric: tabular-nums;
 }
 
 #preview {
@@ -236,6 +301,27 @@ select {
   -webkit-box-orient: vertical;
   color: var(--muted);
   font-style: italic;
+}
+
+#preview:empty {
+  display: none;
+}
+
+.slider-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.slider-row input[type="range"] {
+  accent-color: var(--accent);
+}
+
+.slider-row output {
+  min-width: 3.5ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
 }
 
 #status {
@@ -269,7 +355,54 @@ select {
     padding: 12px;
   }
 
-  .controls button {
-    flex: 1 1 auto;
+  .controls {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
   }
+
+  .controls #playPause {
+    grid-column: 1 / -1;
+    order: -1;
+  }
+
+  .controls #readAgain,
+  .controls #saveCurrent {
+    margin-left: 0;
+  }
+}
+
+@media (min-width: 1100px) {
+  main {
+    grid-template-areas:
+      "transport transport"
+      "sources   settings"
+      "library   models"
+      "status    status";
+    grid-template-columns: minmax(0, 1fr) 360px;
+    max-width: 1080px;
+  }
+
+  #transport { grid-area: transport; position: static; box-shadow: none; }
+  #sources  { grid-area: sources; }
+  #settings { grid-area: settings; }
+  #library  { grid-area: library; }
+  #models   { grid-area: models; }
+  #status   { grid-area: status; }
+}
+
+@media (forced-colors: active) {
+  button {
+    border: 1px solid ButtonText;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}
+
+::selection {
+  background: var(--ring);
 }

@@ -53,30 +53,43 @@ const ModelStore = (() => {
     return null;
   }
 
+  const copy = (record) => (record.remote ? { name: record.name, remote: record.remote } : { name: record.name, buffer: record.buffer });
   class ModelStore {
-    /* The persisted active model as {name, buffer}, or null for the bundled
-     * default. */
+    /* The persisted active model, or null for the bundled default.
+     * Local models are {name, buffer}; remote endpoints {name, remote}. */
     static loadActive() {
-      if (!hasIndexedDB()) return Promise.resolve(memory ? { name: memory.name, buffer: memory.buffer } : null);
+      if (!hasIndexedDB()) return Promise.resolve(memory ? copy(memory) : null);
       return withStore("readonly", (store) => store.get(KEY)).then((record) => {
-        return record && record.name && record.buffer ? { name: record.name, buffer: record.buffer } : null;
+        if (!record || typeof record.name !== "string" || !record.name.trim()) return null;
+        if (record.remote && typeof record.remote === "object") return copy(record);
+        if (!(record.buffer instanceof ArrayBuffer) || !record.buffer.byteLength) return null;
+        return copy(record);
       });
     }
 
-    /* Persists {name, buffer} (buffer: ArrayBuffer with the GGUF bytes) and
-     * returns the normalized record. Invalid input rejects — the API is
-     * async, so even validation failures come back as rejected promises. */
-    static saveActive({ name, buffer } = {}) {
-      const bytes = bytesOf(buffer);
-      if (typeof name !== "string" || !name.trim()) return Promise.reject(new TypeError("saveActive: name must be a non-empty string"));
-      if (!bytes) return Promise.reject(new TypeError("saveActive: buffer must be an ArrayBuffer"));
-      const record = { name: name.trim(), buffer: bytes, savedAt: Date.now() };
-      const normalized = { name: record.name, buffer: record.buffer };
-      if (!hasIndexedDB()) {
-        memory = record;
-        return Promise.resolve(normalized);
+    /* Persists a local model ({name, buffer: ArrayBuffer}) or a remote
+     * endpoint ({name, remote: config}) and returns the normalized record.
+     * Invalid input rejects — the API is async, so even validation failures
+     * come back as rejected promises. */
+    static saveActive(record = {}) {
+      let normalized;
+      if (record.remote && typeof record.remote === "object") {
+        if (typeof record.name !== "string" || !record.name.trim()) {
+          return Promise.reject(new TypeError("saveActive: name must be a non-empty string"));
+        }
+        normalized = { name: record.name.trim(), remote: record.remote };
+      } else {
+        const bytes = bytesOf(record.buffer);
+        if (typeof record.name !== "string" || !record.name.trim()) return Promise.reject(new TypeError("saveActive: name must be a non-empty string"));
+        if (!bytes) return Promise.reject(new TypeError("saveActive: buffer must be an ArrayBuffer"));
+        normalized = { name: record.name.trim(), buffer: bytes };
       }
-      return withStore("readwrite", (store) => store.put(record, KEY)).then(() => normalized);
+      const stored = { ...normalized, savedAt: Date.now() };
+      if (!hasIndexedDB()) {
+        memory = stored;
+        return Promise.resolve(copy(stored));
+      }
+      return withStore("readwrite", (store) => store.put(stored, KEY)).then(() => copy(stored));
     }
 
     /* Forgets the persisted model; the bundled default takes over again. */
