@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>tiny reader</title>
+  <link rel="stylesheet" href="welcome.css">
+</head>
+<body>
+  <main class="card">
+    <header>
+      <img src="../icons/icon.svg" alt="" width="44" height="44">
+      <div>
+        <h1>tiny reader</h1>
+        <p class="tagline">Read the web aloud, on your own machine.</p>
+      </div>
+    </header>
+
+    <section class="hear" aria-label="Try the voice">
+      <button id="hearIt" class="primary" type="button">▶ Hear it</button>
+      <p class="sample">"Hello! This is tiny reader. Select any text on a page and I will read it to you."</p>
+      <p id="status" role="status"></p>
+    </section>
+
+    <section aria-labelledby="waysHeading">
+      <h2 id="waysHeading">Three ways to read</h2>
+      <ul class="ways">
+        <li>Select text, right-click, choose <b>Read selection with tiny reader</b></li>
+        <li>Click the tiny reader button in the toolbar</li>
+        <li>Press <kbd id="shortcut">…</kbd>
+          <button id="changeShortcut" class="link" type="button">Change shortcut</button></li>
+      </ul>
+    </section>
+
+    <p class="workspace">PDFs, ePubs, pasted text and web addresses:
+      <button id="openWorkspace" class="link" type="button">Open the reader workspace</button></p>
+
+    <footer>Runs locally. No account, no tracking.</footer>
+  </main>
+
+  <script type="module" src="welcome.js"></script>
+</body>
+</html>

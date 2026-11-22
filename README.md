@@ -176,7 +176,7 @@ environment variables):
 5. Package from the extension root (nothing outside these paths ships):
 
    ```bash
-   zip -r tiny-reader.xpi manifest.json background compat engine vendor content popup reader logic icons assets
+   zip -r tiny-reader.xpi manifest.json background compat engine vendor content popup reader welcome logic icons assets
    ```
 
 6. Upload `tiny-reader.xpi` to

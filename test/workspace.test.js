@@ -59,10 +59,10 @@ test("no saved-article library: nothing read is kept in storage", () => {
   assert.doesNotMatch(content, /data-role="queue"/, "mini-player still shows a queue chip");
 });
 
-test("reader and popup scripts declare every constant they use", () => {
+test("reader, popup and welcome scripts declare every constant they use", () => {
   /* 68e793e dropped `const NOTICE_MS` but kept its use: every status notice
    * threw, so opening a file (ePub, PDF, …) never started reading. */
-  for (const file of ["reader/reader.js", "popup/popup.js"]) {
+  for (const file of ["reader/reader.js", "popup/popup.js", "welcome/welcome.js"]) {
     const source = readFileSync(join(root, file), "utf8")
       .replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "") // comments
       .replace(/`(?:\\.|[^`\\])*`|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g, '""'); // strings

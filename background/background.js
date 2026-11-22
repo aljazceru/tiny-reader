@@ -888,9 +888,13 @@ browser.runtime.onMessage.addListener((message, sender) => {
 
 /* ------------------------------------------------------- entry points */
 
-browser.runtime.onInstalled.addListener(() => {
+browser.runtime.onInstalled.addListener((details) => {
   /* Older versions kept a saved-article library and queue; drop them. */
   browser.storage.local.remove(["libraryItems", "queueIds"]).catch(() => {});
+  /* First run only — never on update: let the new user hear the voice. */
+  if (details.reason === "install") {
+    browser.tabs.create({ url: "welcome/welcome.html" }).catch(() => {});
+  }
   /* Firefox exposes both namespaces; Chrome only contextMenus. */
   const menus = browser.menus || browser.contextMenus;
   menus.create({ id: "tv-selection", title: "Read selection with tiny reader", contexts: ["selection"] });

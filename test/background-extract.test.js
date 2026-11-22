@@ -34,7 +34,7 @@ const INJECT_FILES = ["compat/compat.js", "vendor/readability.js", "content/cont
  * Returns the sandbox, the fake browser, recorded calls, and the listeners
  * the scripts registered. */
 function loadBackground(fakes = {}) {
-  const calls = { sendMessage: [], executeScript: [], menus: [], tabsCreate: [] };
+  const calls = { sendMessage: [], executeScript: [], menus: [], tabsCreate: [], storageRemove: [] };
   const listeners = {};
   const on = (name) => ({ addListener: (fn) => { (listeners[name] = listeners[name] || []).push(fn); } });
   const store = { ...(fakes.storage || {}) };
@@ -64,7 +64,11 @@ function loadBackground(fakes = {}) {
           return Promise.resolve(result);
         },
         set: (entries) => { Object.assign(store, entries); return Promise.resolve(); },
-        remove: (keys) => { for (const key of [].concat(keys)) delete store[key]; return Promise.resolve(); },
+        remove: (keys) => {
+          calls.storageRemove.push([].concat(keys));
+          for (const key of [].concat(keys)) delete store[key];
+          return Promise.resolve();
+        },
       },
     },
     tabs: {
@@ -143,4 +147,17 @@ test("injection failure gets a specific error", async () => {
     error && error.message,
     "tiny reader can't read this page. Try selecting the text and using the right-click menu, or open it in the reader workspace.",
   );
+});
+
+test("install opens the welcome page once", () => {
+  const h = loadBackground();
+  for (const fn of h.listeners.installed) fn({ reason: "install" });
+  assert.deepEqual(JSON.parse(JSON.stringify(h.calls.tabsCreate)), [{ url: "welcome/welcome.html" }]);
+});
+
+test("update drops the old library keys but opens no page", () => {
+  const h = loadBackground();
+  for (const fn of h.listeners.installed) fn({ reason: "update" });
+  assert.equal(h.calls.tabsCreate.length, 0);
+  assert.deepEqual(h.calls.storageRemove, [["libraryItems", "queueIds"]]);
 });

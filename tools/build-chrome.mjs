@@ -153,7 +153,7 @@ function renderIcon(size) {
 
 const SHARED = [
   "background", "chrome", "compat", "content", "engine", "icons", "logic",
-  "popup", "reader", "vendor", "assets", "LICENSE", "NOTICE",
+  "popup", "reader", "vendor", "welcome", "assets", "LICENSE", "NOTICE",
 ];
 
 function copyTree(from, to) {
@@ -209,8 +209,8 @@ copyFileSync(join(root, "manifest.json"), join(out, "manifest.firefox.json"));
 writeFileSync(join(out, "manifest.json"), JSON.stringify(MANIFEST, null, 2) + "\n");
 for (const size of [16, 32, 48, 96]) writeFileSync(join(out, "icons", `icon${size}.png`), renderIcon(size));
 
-// The popup and reader pages need the shim before their own scripts.
-for (const page of ["popup/popup.html", "reader/reader.html"]) {
+// The popup, reader and welcome pages need the shim before their own scripts.
+for (const page of ["popup/popup.html", "reader/reader.html", "welcome/welcome.html"]) {
   const path = join(out, page);
   let html = readFileSync(path, "utf8");
   html = html.replace(/<script src="\.\.\/vendor\/readability\.js">/,
@@ -219,6 +219,8 @@ for (const page of ["popup/popup.html", "reader/reader.html"]) {
   html = html.replace(/<script src="reader\.css" noop>/, ""); // no-op guard
   html = html.replace(/<script type="module" src="reader\.js">/,
     '<script src="../compat/compat.js"></script>\n  <script type="module" src="reader.js">');
+  html = html.replace(/<script type="module" src="welcome\.js">/,
+    '<script src="../compat/compat.js"></script>\n  <script type="module" src="welcome.js">');
   writeFileSync(path, html);
 }
 
