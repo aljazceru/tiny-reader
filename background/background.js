@@ -66,6 +66,7 @@ let remoteTarget = 0;
 let remotePumping = false;
 let resumeAt = null; // sentence to land on when a lost Chrome host restarts the job
 let hostRestarts = 0; // consecutive host losses recovered for the current job
+let pendingCandidate = null; // model worker being validated by setModel
 let textChunks = null; // cached splitter (logic/chunks.js)
 let globalPrefs = null; // { voice, speed } from storage
 let sitePrefs = {}; // host -> { voice?, speed? }
@@ -213,8 +214,7 @@ async function ensureWorker() {
   if (worker && EngineHost.hostLost(worker)) {
     /* The host document is gone (idle-closed or reaped) and its worker
      * died with it; the stale proxy would silently drop the next job. */
-    worker.onmessage = null;
-    worker.onerror = null;
+    terminateWorker(worker);
     worker = null;
   }
   if (worker) return worker;
@@ -225,17 +225,31 @@ async function ensureWorker() {
 
 /* Chrome's offscreen host can die without warning (reaped or crashed);
  * posts into it evaporate and the plan never comes — the read would hang
- * at "planning". A lost host restarts the in-flight engine job on a
- * fresh document, landing on the same sentence; consecutive losses give
- * up with a visible error instead of restarting forever. A paused read
- * is left alone (Chrome reaps the idle host ~30 s into a pause and the
- * read must not start speaking on its own) — resume() restarts it. */
+ * at "planning". One recovery path for every loss: the worker proxy dies
+ * with its document, a model validation in flight fails fast, and an
+ * in-flight job restarts on a fresh document at the same sentence —
+ * capped so a host that keeps dying gives up with a visible error. A
+ * paused read just loses its proxy (Chrome reaps the idle host ~30 s
+ * into a pause and the read must not start speaking on its own);
+ * seek()/resume() restart it on the next user action. */
 EngineHost.onHostLost(() => {
+  if (pendingCandidate && pendingCandidate.onerror) {
+    pendingCandidate.onerror({ message: "audio host connection lost" });
+  }
+  const stale = worker;
+  worker = null;
+  terminateWorker(stale);
   if (!["planning", "playing"].includes(S.status)) return;
   if (isRemoteModel()) return seek(Math.max(0, S.playingIndex));
   if (hostRestarts >= 3) return fail("The audio host keeps restarting — playback failed.");
   hostRestarts++;
-  resumeAt = Math.max(0, S.playingIndex);
+  restartAt(resumeAt !== null ? resumeAt : Math.max(0, S.playingIndex));
+});
+
+/* Restart the current job on a fresh host; the plan lands on `index`
+ * (see resumeAt in onWorkerMessage). */
+function restartAt(index) {
+  resumeAt = index;
   beginJob({
     title: S.page ? S.page.title : "",
     url: S.page ? S.page.url : "",
@@ -243,7 +257,7 @@ EngineHost.onHostLost(() => {
     source: S.source,
     tabId: S.tabId,
   });
-});
+}
 
 function onWorkerMessage(message) {
   if (message.type === "ready") {
@@ -251,7 +265,6 @@ function onWorkerMessage(message) {
     applyModel(message);
   } else if (message.type === "plan") {
     if (message.jobId !== jobId) return;
-    hostRestarts = 0; // the fresh host is healthy
     S.blockOf = message.blockOf;
     S.total = message.total;
     if (!S.total) { resumeAt = null; return fail("Nothing to pronounce here."); }
@@ -448,6 +461,25 @@ function swapWorker(candidate, ready) {
   if (ready) onWorkerMessage(ready); // sampleRate + model name/voices
 }
 
+/* Validate a model in a fresh (candidate) worker while the current one
+ * keeps playing. A lost audio host rejects fast through the host-lost
+ * listener instead of hanging on the 120 s load timeout; the hostLost
+ * check covers a loss between the spawn and the wait starting. */
+async function validateModel(model) {
+  const candidate = await spawnWorker(model);
+  pendingCandidate = candidate;
+  try {
+    if (EngineHost.hostLost(candidate)) throw new Error("audio host connection lost");
+    const ready = await workerReady(candidate);
+    return { candidate, ready };
+  } catch (error) {
+    terminateWorker(candidate); // invalid model: previous model stays active
+    throw error;
+  } finally {
+    pendingCandidate = null;
+  }
+}
+
 /* Adopts a confirmed remote endpoint: no worker runs while it is active. */
 function applyRemoteModel(descriptor) {
   terminateWorker(worker);
@@ -468,11 +500,7 @@ async function setModel(data) {
     /* Back to the bundled model. */
     await clearStoredModel().catch(() => {});
     activeModel = null;
-    const candidate = await spawnWorker(undefined);
-    const ready = await workerReady(candidate).catch((error) => {
-      terminateWorker(candidate);
-      throw error;
-    });
+    const { candidate, ready } = await validateModel(undefined);
     swapWorker(candidate, ready);
     await restartJobIfReading();
     return { name: S.model.name, voices: S.model.voices };
@@ -512,14 +540,7 @@ async function setModel(data) {
 
   /* Validate in a fresh worker: the current worker keeps playing until the
    * new model has proven it loads. */
-  const candidate = await spawnWorker({ name, buffer });
-  let ready;
-  try {
-    ready = await workerReady(candidate);
-  } catch (error) {
-    terminateWorker(candidate); // invalid model: previous model stays active
-    throw error;
-  }
+  const { candidate, ready } = await validateModel({ name, buffer });
   swapWorker(candidate, ready);
   activeModel = { name, buffer };
   try {
@@ -635,6 +656,7 @@ async function stopPlayback() {
   if (worker) worker.postMessage({ type: "cancel" });
   stopRemoteJob();
   resumeAt = null;
+  hostRestarts = 0; // a fresh user-initiated job gets a fresh restart budget
   if (player) player.stopSources();
   await toTab({ type: "clearHighlight" });
   toTab({ type: "reading", on: false });
@@ -742,7 +764,9 @@ async function readBlocks(data, sender) {
  * jump point. */
 function seek(index) {
   if (!player || !S.total) return;
-  if (!isRemoteModel() && !worker) return;
+  /* A lost Chrome host took the worker and its plan with it; restart the
+   * job on a fresh document and land on the requested sentence. */
+  if (!isRemoteModel() && (!worker || EngineHost.hostLost(worker))) return restartAt(index);
   if (index >= S.total) return finish();
   jobId++;
   player.stopSources();
@@ -765,6 +789,7 @@ function seek(index) {
 
 function onSentenceEnded(tag) {
   if (S.status !== "playing") return;
+  hostRestarts = 0; // playback is alive — earlier host losses were recovered
   const next = tag + 1;
   if (next >= S.total) return finish();
   S.playingIndex = next;
@@ -781,6 +806,7 @@ async function finish() {
   jobId++;
   if (worker) worker.postMessage({ type: "cancel" });
   stopRemoteJob();
+  resumeAt = null;
   if (player) player.stopSources();
   S.status = "done";
   badge();
@@ -800,21 +826,11 @@ async function pause() {
 
 async function resume() {
   if (S.status !== "paused" || !player) return;
-  if (EngineHost.hostLost(worker)) {
-    /* Chrome reaped the offscreen document while paused; the worker and
-     * its plan went with it, so there is nothing to resume. Restart the
-     * job and land on the paused sentence (ensureWorker drops the stale
-     * proxy and respawns). */
-    if (isRemoteModel()) return seek(Math.max(0, S.playingIndex));
-    resumeAt = Math.max(0, S.playingIndex);
-    return beginJob({
-      title: S.page ? S.page.title : "",
-      url: S.page ? S.page.url : "",
-      blocks: S.blockTexts,
-      source: S.source,
-      tabId: S.tabId,
-    });
-  }
+  /* Chrome reaped the offscreen document while paused; the worker and
+   * its plan went with it, so there is nothing to resume. Restart the
+   * job through seek() and land on the paused sentence. */
+  const lost = isRemoteModel() ? EngineHost.hostLost() : !worker || EngineHost.hostLost(worker);
+  if (lost) return seek(Math.max(0, S.playingIndex));
   await player.resume();
   S.status = "playing";
   badge();

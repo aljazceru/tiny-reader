@@ -224,24 +224,24 @@ test("a claim waits for an in-flight close instead of adopting a torn-down docum
 });
 
 /* A post can still find the port dead (the disconnect event has not been
- * delivered yet). Dropping a job silently there would hang the read at
- * "planning"; it must surface through the worker error contract. */
-test("a job lost to a dead port surfaces as a worker error", async () => {
+ * delivered yet). A job lost there would hang the read at "planning";
+ * the post marks the host lost so the listener restarts it. */
+test("a post into a dead port notifies the host-lost listener", async () => {
   const h = harness();
   h.hello();
   const worker = await h.EngineHost.spawnWorker(undefined);
   await until(() => h.posted.length === 1, "load message on the port");
-  let error = null;
-  worker.onerror = (event) => { error = event.message; };
+  let lost = 0;
+  h.EngineHost.onHostLost(() => { lost++; });
   h.ports[0].dead = true;
   worker.postMessage({ type: "job", jobId: 3 });
-  await sleep(30);
-  assert.ok(error, "the dropped job must surface as a worker error");
+  await until(() => lost === 1, "host-lost notification");
 });
 
-/* Same for the proxy gate: the current worker's post finding its
- * document gone must fail visibly, not silently. */
-test("a proxy post into a gone document surfaces through onerror", async () => {
+/* A proxy whose document is gone must drop posts instead of writing
+ * into a replacement or erroring — the listener already restarted the
+ * job that worker belonged to. */
+test("a proxy post into a gone document drops without erroring", async () => {
   const h = harness();
   h.hello();
   const worker = await h.EngineHost.spawnWorker(undefined);
@@ -250,5 +250,7 @@ test("a proxy post into a gone document surfaces through onerror", async () => {
   let error = null;
   worker.onerror = (event) => { error = event.message; };
   worker.postMessage({ type: "job", jobId: 9 });
-  assert.equal(error, "audio host connection lost");
+  await sleep(20);
+  assert.equal(error, null);
+  assert.equal(h.posted.length, 1);
 });

@@ -24,9 +24,10 @@ importScripts(
 );
 
 /* Keep the offscreen document only while it can be needed: reading
- * (loading/planning/playing/paused) or while a model worker exists. */
+ * (loading/planning/playing/paused) or while setModel is validating a
+ * candidate worker inside it (background.js' pendingCandidate). */
 setInterval(() => {
   if (typeof S === "undefined" || typeof EngineHost === "undefined") return;
   const busy = S && ["loading", "planning", "playing", "paused"].includes(S.status);
-  if (!busy && EngineHost.useAudioHost) EngineHost.closeDocument();
+  if (!busy && !pendingCandidate && EngineHost.useAudioHost) EngineHost.closeDocument();
 }, 30000);

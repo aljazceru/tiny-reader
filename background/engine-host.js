@@ -113,13 +113,9 @@ const EngineHost = (() => {
       port.postMessage({ scope: "tv-host", message });
     } catch (error) {
       commandPort = null;
-      /* A job lost in transit would hang the read at "planning"; surface
-       * it through the worker error contract so it fails visibly. */
-      if (message.kind === "engine" && message.message && message.message.type === "job") {
-        route({ scope: "tv-engine", error: "audio host connection lost" });
-      }
-      /* The port died with the document it served; mark it lost so the
-       * next command recreates it instead of posting into a void. */
+      /* The port died with the document it served; the lost-host
+       * listener restarts whatever was in flight and the next command
+       * recreates the document instead of posting into a void. */
       markLost();
     }
   }
@@ -197,13 +193,10 @@ const EngineHost = (() => {
 
     /* A proxy whose document is gone must not post into its replacement:
      * its messages (or a terminate-engine) would corrupt the fresh host's
-     * own worker. The drop still surfaces through the error contract —
-     * a post that dies silently would hang the read at "planning". */
+     * own worker. The lost-host listener has already restarted the job
+     * the dead engine belonged to, so the post just drops. */
     postMessage(message) {
-      if (this.generation !== hostGeneration || !hostDocument) {
-        if (this.onerror) this.onerror({ message: "audio host connection lost" });
-        return;
-      }
+      if (this.generation !== hostGeneration || !hostDocument) return;
       post({ kind: "engine", message });
     }
 
