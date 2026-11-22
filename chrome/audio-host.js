@@ -1,10 +1,11 @@
 /*
  * tiny reader — Chrome audio host page.
  *
- * Chrome service workers have no DOM and no AudioContext, and offscreen
- * documents proved unreliable for script execution under automation, so the
- * synthesis Worker and the gapless player live in this pinned background
- * tab instead. Everything rides one runtime port ("tv-audio-host") —
+ * Chrome service workers have no DOM and no AudioContext, so the
+ * synthesis Worker and the gapless player live in this offscreen
+ * document (created with the AUDIO_PLAYBACK reason, which also lets the
+ * context suspend and resume without user activation). Everything rides
+ * one runtime port ("tv-audio-host") —
  * commands down, replies up. Ports are ordered and bidirectional, so
  * neither side can miss the initial model load; the port reconnects when
  * the service worker restarts.
@@ -45,6 +46,11 @@
     worker.onerror = (event) => {
       uplink({ scope: "tv-engine", error: event.message || "worker failed" });
     };
+    /* Model bytes arrive as a plain number array (extension messaging
+     * demotes ArrayBuffers); rebuild them for the worker's load contract. */
+    worker.postMessage(model
+      ? { type: "load", name: model.name, buffer: new Uint8Array(model.bytes).buffer }
+      : { type: "load" });
   }
 
   const commands = [];
@@ -79,12 +85,9 @@
       } else if (job.kind === "enqueue-encoded") {
         player.enqueueEncoded(new Uint8Array(job.audio || []).buffer, job.tag);
       } else if (job.kind === "pause") {
-        /* Never suspend the context: this tab has no user activation, and
-         * Chrome would refuse a later resume. Dropping the sources pauses
-         * playback; the service worker replays on resume. */
-        player.stopSources();
+        player.pause();
       } else if (job.kind === "resume") {
-        /* Resumes are driven by seek/replay from the service worker. */
+        player.resume();
       } else if (job.kind === "stop-sources") {
         player.stopSources();
       }
@@ -94,9 +97,9 @@
     }
   };
 
-  /* The service worker owns the port and connects on demand; this page
-   * only ever listens. (A page-side reconnect loop would wake-race the
-   * worker and burn CPU while it restarts.) */
+  /* The service worker owns the port and connects on demand; this
+   * document only ever listens. (A document-side reconnect loop would
+   * wake-race the worker and burn CPU while it restarts.) */
   chrome.runtime.onConnect.addListener((incoming) => {
     if (incoming.name !== "tv-audio-host") return;
     port = incoming;
@@ -105,8 +108,8 @@
       if (port === incoming) port = null;
     });
   });
-  /* Tell the service worker this page is listening; a port opened before
-   * this lands would find nobody to deliver to. */
+  /* Tell the service worker this document is listening; a port opened
+   * before this lands would find nobody to deliver to. */
   chrome.runtime.sendMessage({ scope: "tv-host-hello" }).catch(() => {});
 
   /* Diagnostic handle: audio state for debugging and the Chrome E2E. */

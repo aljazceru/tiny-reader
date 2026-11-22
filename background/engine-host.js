@@ -4,9 +4,9 @@
  * Firefox event page: the synthesis Worker and the VocaPlayer run directly
  * in the background page — this factory just wraps their construction.
  *
- * Chrome service worker: no DOM and no AudioContext, so both run in a
- * pinned background tab (chrome/audio-host.html). All traffic rides one
- * runtime port ("tv-audio-host"): commands down (queued until the tab
+ * Chrome service worker: no DOM and no AudioContext, so both run in an
+ * offscreen document (chrome/audio-host.html). All traffic rides one
+ * runtime port ("tv-audio-host"): commands down (queued until the document
  * connects), replies up. The proxies implement the exact surface
  * background.js touches: worker {postMessage, terminate, onmessage,
  * onerror}, player {enqueue, enqueueEncoded, pause, resume, stopSources,
@@ -20,23 +20,23 @@
 const EngineHost = (() => {
   const HOST_URL = "chrome/audio-host.html";
   /* Firefox event pages run the engine in-page; Chrome service workers
-   * (no DOM, no AudioContext) delegate to the audio-host tab. */
-  const offscreen = typeof navigator === "object" && !/Firefox/.test(navigator.userAgent);
+   * (no DOM, no AudioContext) delegate to an offscreen audio host. */
+  const useAudioHost = typeof navigator === "object" && !/Firefox/.test(navigator.userAgent);
 
   const sinks = new Set();
   let commandPort = null;
-  let hostTabId = null;
+  let hostDocument = false;
 
   const route = (event) => {
     const data = event || {};
     for (const sink of sinks) sink(data);
   };
 
-  /* The host tab announces itself ("tv-host-hello"); commands wait for it
-   * so a port is never opened into an unloaded page. */
+  /* The host document announces itself ("tv-host-hello"); commands wait
+   * for it so a port is never opened into an unloaded page. */
   let hostAlive = false;
   let helloWaiters = [];
-  if (offscreen) {
+  if (useAudioHost) {
     chrome.runtime.onMessage.addListener((message) => {
       if (!message || message.scope !== "tv-host-hello") return undefined;
       hostAlive = true;
@@ -61,13 +61,19 @@ const EngineHost = (() => {
     port.onMessage.addListener(route);
     port.onDisconnect.addListener(() => {
       if (commandPort === port) commandPort = null;
+      /* The document went away (closed or reaped); the next command
+       * recreates it and waits for a fresh hello. */
+      hostDocument = false;
+      hostAlive = false;
     });
     commandPort = port;
     return port;
   }
 
-  function post(message) {
-    if (!offscreen) return;
+  async function post(message) {
+    if (!useAudioHost) return;
+    await ensureDocument();
+    await hostReady();
     try {
       connectPort().postMessage({ scope: "tv-host", message });
     } catch (error) {
@@ -77,23 +83,34 @@ const EngineHost = (() => {
 
 
   async function ensureDocument() {
-    if (!offscreen) return;
-    if (hostTabId !== null) return;
-    const existing = await chrome.tabs.query({ url: chrome.runtime.getURL(HOST_URL) });
-    if (existing.length) {
-      hostTabId = existing[0].id;
-      return;
+    if (!useAudioHost || hostDocument) return;
+    /* Claim it first: a concurrent caller waits on the hello instead of
+     * racing a second createDocument (only one may exist). */
+    hostDocument = true;
+    try {
+      const existing = await chrome.runtime.getContexts({
+        contextTypes: ["OFFSCREEN_DOCUMENT"],
+        documentUrls: [chrome.runtime.getURL(HOST_URL)],
+      });
+      if (!existing.length) {
+        await chrome.offscreen.createDocument({
+          url: HOST_URL,
+          reasons: ["AUDIO_PLAYBACK"],
+          justification: "Plays synthesized speech",
+        });
+      }
+    } catch (error) {
+      hostDocument = false;
+      throw error;
     }
-    const tab = await chrome.tabs.create({ url: HOST_URL, active: false, pinned: true });
-    hostTabId = tab.id;
   }
 
   async function closeDocument() {
-    if (!offscreen || hostTabId === null) return;
-    const id = hostTabId;
-    hostTabId = null;
+    if (!useAudioHost || !hostDocument) return;
+    hostDocument = false;
+    hostAlive = false;
     try {
-      await chrome.tabs.remove(id);
+      await chrome.offscreen.closeDocument();
     } catch (error) { /* already gone */ }
   }
 
@@ -109,7 +126,15 @@ const EngineHost = (() => {
         else if (this.onmessage) this.onmessage({ data: data.message });
       };
       sinks.add(this.sink);
-      post({ kind: "engine", message: { type: "load", model } });
+      /* ArrayBuffers die on the JSON port; bytes cross as a plain number
+       * array and the host document rebuilds them. */
+      post({
+        kind: "engine",
+        message: {
+          type: "load",
+          model: model ? { name: model.name, bytes: Array.from(new Uint8Array(model.buffer)) } : undefined,
+        },
+      });
     }
 
     postMessage(message) { post({ kind: "engine", message }); }
@@ -120,7 +145,7 @@ const EngineHost = (() => {
     }
   }
 
-  /* Player stand-in: every call forwards to the host-tab player; sentence
+  /* Player stand-in: every call forwards to the host player; sentence
    * ends come back over the port and drive the onEnded callback. */
   class HostPlayer {
     constructor() {
@@ -146,14 +171,14 @@ const EngineHost = (() => {
   }
 
   async function spawnWorker(url, model) {
-    if (!offscreen) return new LocalWorker(url, model);
+    if (!useAudioHost) return new LocalWorker(url, model);
     await ensureDocument();
     await hostReady();
     return new HostWorker(model);
   }
 
   function createPlayer() {
-    return offscreen ? new HostPlayer() : new VocaPlayer();
+    return useAudioHost ? new HostPlayer() : new VocaPlayer();
   }
 
   /* Local Worker with the same onmessage-property contract as the proxy. */
@@ -170,7 +195,7 @@ const EngineHost = (() => {
     }
   }
 
-  return { offscreen, ensureDocument, closeDocument, spawnWorker, createPlayer, LocalWorker };
+  return { useAudioHost, ensureDocument, closeDocument, spawnWorker, createPlayer, LocalWorker };
 })();
 
 if (typeof module === "object") module.exports = EngineHost;

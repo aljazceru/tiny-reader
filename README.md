@@ -57,7 +57,7 @@ unsigned add-ons.
 ## Chrome / Chromium
 
 The same tree builds for Chrome MV3, where the background is a service
-worker and audio plays through a pinned audio-host tab (Chrome has no event
+worker and audio plays through an offscreen document (Chrome has no event
 pages, and service workers have no Web Audio):
 
 ```bash
@@ -66,11 +66,10 @@ chromium --load-extension=dist/chrome # or load unpacked via chrome://extensions
 ```
 
 Everything except the audio/engine host is shared verbatim; `compat/compat.js`
-maps `browser` to `chrome` for Chrome pages. Two Chrome-specific behaviors:
-pause stops the current sentence and resume replays it (the audio-host tab
-has no user activation, so a suspended AudioContext could not resume), and
-the pinned audio-host tab appears while anything is being read — closing it
-stops playback.
+maps `browser` to `chrome` for Chrome pages. One Chrome-specific behavior:
+the synthesis worker and audio player run in an offscreen document created
+with the `AUDIO_PLAYBACK` reason, so pause/resume suspend and resume the
+AudioContext exactly like on Firefox, and no tab ever appears.
 
 
 ## Usage
@@ -104,7 +103,7 @@ background/background.js shared job path, runtime APIs, models,
                          remote-endpoint synthesis pump
 background/player.js     gapless Web Audio player (pause = context suspend)
 background/engine-host.js worker+player in the page (Firefox) or in the
-                         Chrome audio-host tab, behind one interface
+                         Chrome offscreen document, behind one interface
 background/chrome-sw.js  Chrome service worker bootstrap (importScripts)
 engine/engine-worker.mjs module worker: model loading/validation, sentence
                          planning, flow-controlled synthesis
@@ -114,7 +113,7 @@ reader/                  full-page workspace, URL/HTML/PDF/ePub extraction,
                          model management
 logic/                   pure resampling, remote-TTS helpers, model
                          store, preference helpers
-chrome/audio-host.*    Chrome audio-host tab (engine worker + player)
+chrome/audio-host.*    Chrome offscreen audio document (engine worker + player)
 compat/compat.js         `browser` ← `chrome` shim for Chrome pages
 vendor/                  tiny-voca engine, Readability, PDF.js, fflate
 assets/tiny-voca.gguf    bundled model + phonemizer data

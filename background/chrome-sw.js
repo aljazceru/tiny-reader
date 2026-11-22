@@ -5,8 +5,9 @@
  * workers cannot use import maps or module scripts with the classic
  * background code — so this bootstrap loads the same classic scripts the
  * Firefox event page loads, in the same order, via importScripts. The
- * engine Worker and the audio player run in the pinned audio-host tab (see
- * background/engine-host.js); everything else is shared verbatim.
+ * engine Worker and the audio player run in the offscreen audio-host
+ * document (see background/engine-host.js); everything else is shared
+ * verbatim.
  */
 
 /* global EngineHost */
@@ -22,10 +23,10 @@ importScripts(
   "../background/background.js",
 );
 
-/* Keep the audio-host tab only while it can be needed: reading
+/* Keep the offscreen document only while it can be needed: reading
  * (loading/planning/playing/paused) or while a model worker exists. */
 setInterval(() => {
   if (typeof S === "undefined" || typeof EngineHost === "undefined") return;
   const busy = S && ["loading", "planning", "playing", "paused"].includes(S.status);
-  if (!busy && EngineHost.offscreen) EngineHost.closeDocument();
+  if (!busy && EngineHost.useAudioHost) EngineHost.closeDocument();
 }, 30000);

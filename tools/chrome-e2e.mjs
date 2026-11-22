@@ -73,8 +73,8 @@ function startMock(port = 8130) {
 rmSync(PROFILE, { recursive: true, force: true });
 mkdirSync(PROFILE, { recursive: true });
 
-/* Real-time Web Audio needs a live audio thread; headless Chrome freezes
- * the AudioContext clock, so run headed unless CHROME_HEADLESS=1. */
+/* Headed is the default for realism; --headless=new also advances the
+ * AudioContext clock on Chromium 157+ (verified by the offscreen spike). */
 const HEADLESS = process.env.CHROME_HEADLESS === "1";
 const { list, close: cleanup } = await launchChromium({
   ext: DIST, port: PORT, headless: HEADLESS, profile: PROFILE,
@@ -151,11 +151,13 @@ try {
   assert(advanced >= 1, `sentence index advanced to ${advanced + 1} (offscreen audio clock runs)`);
 
   swTab = await connect(sw.webSocketDebuggerUrl);
-  const hostTabs = await swTab.evaluate(
-    "chrome.tabs.query({ url: chrome.runtime.getURL('chrome/audio-host.html') }).then((t) => t.length)");
-  assert(hostTabs >= 1, `audio-host tab alive (${hostTabs})`);
+  const hostContexts = await swTab.evaluate(
+    "chrome.runtime.getContexts({ contextTypes: ['OFFSCREEN_DOCUMENT'] }).then((c) => c.length)");
+  assert(hostContexts >= 1, `offscreen audio-host document alive (${hostContexts})`);
   swTab.close(); /* a held-open SW debugger session wedges later steps */
   swTab = null;
+  const hostPages = (await list()).filter((t) => t.type === "page" && t.url.includes("chrome/audio-host.html"));
+  assert(hostPages.length === 0, "no pinned audio-host tab");
   /* 2. speed */
   await tab.evaluate(
     "const s = document.getElementById('speed'); s.value = '1.5'; s.dispatchEvent(new Event('change')); true");

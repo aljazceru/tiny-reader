@@ -34,4 +34,6 @@ test("chrome build renders the full speaker icon at every size", () => {
     assert.ok(b > 200 && r < 160, `${file}: speaker missing at its centre (got ${r},${g},${b})`);
   }
   assert.ok("16" in manifest.action.default_icon && "32" in manifest.action.default_icon, "toolbar sizes 16/32 missing");
+  assert.ok(manifest.permissions.includes("offscreen"), "offscreen permission missing");
+  assert.ok(!manifest.permissions.includes("tabs"), "tabs permission still present");
 });

@@ -745,12 +745,6 @@ async function pause() {
 
 async function resume() {
   if (S.status !== "paused" || !player) return;
-  if (EngineHost.offscreen) {
-    /* Chrome's audio-host tab has no user activation, so a suspended
-     * AudioContext cannot resume there; replay the current sentence
-     * instead (the context itself keeps running). */
-    return seek(Math.max(0, S.playingIndex));
-  }
   await player.resume();
   S.status = "playing";
   badge();

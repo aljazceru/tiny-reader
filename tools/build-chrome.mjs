@@ -183,7 +183,7 @@ const MANIFEST = {
       run_at: "document_idle",
     },
   ],
-  permissions: ["storage", "contextMenus", "scripting", "activeTab", "tabs"],
+  permissions: ["storage", "contextMenus", "scripting", "activeTab", "offscreen"],
   host_permissions: ["<all_urls>"],
   background: { service_worker: "background/chrome-sw.js" },
   action: {

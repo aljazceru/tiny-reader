@@ -76,6 +76,8 @@
 
 ### Task 3: Chrome audio in an offscreen document; custom models on Chrome
 
+> Spike result (Task 2): offscreen works headed and headless; AudioContext suspend/resume works without a user gesture, so pause/resume use the real context.
+
 **Files:**
 - Modify: `background/engine-host.js` (flag rename, `ensureDocument`/`closeDocument`, `HostWorker` load payload)
 - Modify: `chrome/audio-host.js` (`spawnWorker` posts load; rebuild model bytes), `chrome/audio-host.html` (drop tab text), `background/chrome-sw.js` (comments; idle close via `closeDocument`)

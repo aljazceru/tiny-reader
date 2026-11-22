@@ -21,8 +21,8 @@ export async function launchChromium({ ext, port = 9391, headless = false, profi
   const dir = profile || mkdtempSync(join(tmpdir(), "tiny-reader-cdp-"));
   mkdirSync(dir, { recursive: true });
 
-  /* Real-time Web Audio needs a live audio thread; headless Chrome freezes
-   * the AudioContext clock, so headed is the default. */
+  /* Headed is the default for realism; --headless=new also advances the
+   * AudioContext clock on Chromium 157+ (verified by the offscreen spike). */
   const proc = spawn(bin, [
     headless ? "--headless=new" : "--no-first-run",
     "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage",
