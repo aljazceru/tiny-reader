@@ -32,10 +32,11 @@ function harness() {
   const closed = [];
   const posted = [];
   const helloListeners = [];
+  const disconnectListeners = [];
   let contexts = [];
   const port = {
     onMessage: { addListener() {} },
-    onDisconnect: { addListener() {} },
+    onDisconnect: { addListener: (fn) => disconnectListeners.push(fn) },
     postMessage: (message) => posted.push(message),
   };
   const chrome = {
@@ -60,6 +61,7 @@ function harness() {
     closed,
     posted,
     hello: () => { for (const fn of helloListeners) fn({ scope: "tv-host-hello" }); },
+    disconnect: () => { for (const fn of disconnectListeners) fn(); },
     set contexts(value) { contexts = value; },
   };
 }
@@ -108,4 +110,23 @@ test("commands after the offscreen document closed recreate it", async () => {
   /* The port message was built inside the vm realm; normalize before
    * comparing across realms. */
   assert.deepEqual(JSON.parse(JSON.stringify(resume)), { scope: "tv-host", message: { kind: "resume" } });
+});
+
+test("hostLost reports a document that was created and is now gone", async () => {
+  const h = harness();
+  assert.equal(h.EngineHost.hostLost(), false); // nothing was ever created
+  await h.EngineHost.ensureDocument();
+  assert.equal(h.EngineHost.hostLost(), false);
+  await h.EngineHost.closeDocument();
+  assert.equal(h.EngineHost.hostLost(), true);
+});
+
+test("hostLost flips when the host port disconnects", async () => {
+  const h = harness();
+  h.hello();
+  await h.EngineHost.spawnWorker(undefined); // creates the document and the port
+  await until(() => h.posted.length, "load message on the port");
+  assert.equal(h.EngineHost.hostLost(), false);
+  h.disconnect();
+  assert.equal(h.EngineHost.hostLost(), true);
 });

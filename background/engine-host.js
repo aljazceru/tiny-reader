@@ -26,6 +26,7 @@ const EngineHost = (() => {
   const sinks = new Set();
   let commandPort = null;
   let hostDocument = false;
+  let hadDocument = false; // a document existed at least once
 
   const route = (event) => {
     const data = event || {};
@@ -99,6 +100,7 @@ const EngineHost = (() => {
           justification: "Plays synthesized speech",
         });
       }
+      hadDocument = true;
     } catch (error) {
       hostDocument = false;
       throw error;
@@ -112,6 +114,13 @@ const EngineHost = (() => {
     try {
       await chrome.offscreen.closeDocument();
     } catch (error) { /* already gone */ }
+  }
+
+  /* True on Chrome when a document existed but is now gone (closed by us
+   * or reaped by Chrome — the port disconnect marks it). Whatever ran in
+   * it (worker, plan, scheduled audio) went away with it. */
+  function hostLost() {
+    return useAudioHost && hadDocument && !hostDocument;
   }
 
   /* Worker stand-in: forwards postMessage to the host-tab engine and
@@ -195,7 +204,7 @@ const EngineHost = (() => {
     }
   }
 
-  return { useAudioHost, ensureDocument, closeDocument, spawnWorker, createPlayer, LocalWorker };
+  return { useAudioHost, hostLost, ensureDocument, closeDocument, spawnWorker, createPlayer, LocalWorker };
 })();
 
 if (typeof module === "object") module.exports = EngineHost;

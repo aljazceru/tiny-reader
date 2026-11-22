@@ -188,6 +188,36 @@ try {
   }
   assert(resumed, "resume reached");
 
+  /* 3b. resume after Chrome reaped the offscreen document: pause, close
+   * the document from the service worker (simulating the ~30 s idle
+   * reaper), resume, and expect playback to continue past the paused
+   * sentence — the job is restarted in a fresh document. */
+  await click("playPause");
+  let pausedAgain = null;
+  for (let i = 0; i < 10 && !pausedAgain; i++) {
+    await delay(1000);
+    const s = await state();
+    if (s && s.status === "paused") pausedAgain = s;
+  }
+  assert(pausedAgain, "second pause reached");
+  const pausedIndex = pausedAgain.index;
+  const swAgain = (await list()).find((t) => t.type === "service_worker" && t.url.includes("chrome-sw.js"));
+  assert(swAgain, "service worker present for closeDocument");
+  swTab = await connect(swAgain.webSocketDebuggerUrl);
+  await swTab.evaluate("chrome.offscreen.closeDocument()");
+  swTab.close(); /* a held-open SW debugger session wedges later steps */
+  swTab = null;
+  await delay(1000);
+  await tab.evaluate("browser.runtime.sendMessage({ type: 'resume' }); true");
+  let continued = null;
+  for (let i = 0; i < 20 && !continued; i++) {
+    await delay(1000);
+    const s = await state();
+    if (s && ((s.status === "playing" && s.index > pausedIndex) || s.status === "done")) continued = s;
+    if (i % 4 === 3) console.log("   resume-after-reap wait:", s && s.status, "index", s && s.index);
+  }
+  assert(continued, `resume after the offscreen document was closed continues (${continued && continued.status}, index ${continued && continued.index} from ${pausedIndex})`);
+
   /* 4. remote endpoint through the models form — in a fresh reader tab:
    * the long-lived CDP session wedges around the model swap while the
    * page itself keeps working, so re-open it. */

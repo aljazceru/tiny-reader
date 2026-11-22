@@ -59,6 +59,7 @@ let remotePlan = null; // { texts, blockOf } while a remote endpoint job runs
 let remoteCursor = 0;
 let remoteTarget = 0;
 let remotePumping = false;
+let resumeAt = null; // sentence to land on when a lost Chrome host restarts the job
 let textChunks = null; // cached splitter (logic/chunks.js)
 let globalPrefs = null; // { voice, speed } from storage
 let sitePrefs = {}; // host -> { voice?, speed? }
@@ -217,7 +218,14 @@ function onWorkerMessage(message) {
     if (message.jobId !== jobId) return;
     S.blockOf = message.blockOf;
     S.total = message.total;
-    if (!S.total) return fail("Nothing to pronounce here.");
+    if (!S.total) { resumeAt = null; return fail("Nothing to pronounce here."); }
+    if (resumeAt !== null) {
+      /* Resume into a re-created host: land on the paused sentence (the
+       * plan is deterministic for the same blocks/voice/speed). */
+      const at = resumeAt;
+      resumeAt = null;
+      return seek(at);
+    }
     worker.postMessage({ type: "advance", jobId, to: LOOKAHEAD });
   } else if (message.type === "chunk") {
     if (message.jobId !== jobId || !player) return;
@@ -580,6 +588,7 @@ async function stopPlayback() {
   jobId++;
   if (worker) worker.postMessage({ type: "cancel" });
   stopRemoteJob();
+  resumeAt = null;
   if (player) player.stopSources();
   await toTab({ type: "clearHighlight" });
   toTab({ type: "reading", on: false });
@@ -745,6 +754,21 @@ async function pause() {
 
 async function resume() {
   if (S.status !== "paused" || !player) return;
+  if (EngineHost.hostLost()) {
+    /* Chrome reaped the offscreen document while paused; the worker and
+     * its plan went with it, so there is nothing to resume. Restart the
+     * job and land on the paused sentence. */
+    if (isRemoteModel()) return seek(Math.max(0, S.playingIndex));
+    if (worker) { worker.onmessage = null; worker.onerror = null; worker = null; }
+    resumeAt = Math.max(0, S.playingIndex);
+    return beginJob({
+      title: S.page ? S.page.title : "",
+      url: S.page ? S.page.url : "",
+      blocks: S.blockTexts,
+      source: S.source,
+      tabId: S.tabId,
+    });
+  }
   await player.resume();
   S.status = "playing";
   badge();
