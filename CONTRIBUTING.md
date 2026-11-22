@@ -40,6 +40,15 @@ geckodriver. Prerequisites:
 Each script's header comment documents its environment variables and the
 test-only xpi patches it applies (never shipped).
 
+`tools/smoke.mjs` is the release smoke check: it loads `dist/chrome` in
+headless Chromium and fails on any uncaught exception or console error
+while it exercises the reader's inputs (speed slider, paste read, the
+PDF/ePub file path, the welcome page's "Hear it"). It needs only a
+Chromium binary (`CHROME_BIN` overrides `/usr/bin/chromium-browser`) and
+a prior `node tools/build-chrome.mjs` — no display or `xvfb-run`. The
+whole release pipeline, ending in the three `dist/` archives, is
+`node tools/release.mjs`.
+
 ## Pull requests
 
 - Add or extend tests for changed logic in `logic/`, `background/`,

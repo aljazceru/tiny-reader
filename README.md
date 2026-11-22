@@ -166,22 +166,31 @@ environment variables):
   model import and invalid-model rejection in a real Firefox.
 - `tools/chrome-e2e.mjs` — the Chrome build over CDP, including a remote
   TTS endpoint against a built-in mock server.
+- `tools/smoke.mjs` — release smoke check: the built Chrome extension in
+  headless Chromium, failing on any page error while the reader's inputs
+  are exercised.
 
 ## Release checklist
 
 1. Update the version in `manifest.json`.
-2. `node --test` and `npx web-ext lint` pass.
-3. The browser end-to-end suites pass.
-4. Tag the release, e.g. `git tag -a v1.0.0 -m "tiny reader 1.0.0"`.
-5. Package from the extension root (nothing outside these paths ships):
+2. Run the release pipeline — unit tests, `web-ext lint`, both Chrome
+   builds, the real-browser smoke check, and packaging; it stops at the
+   first failing step:
 
    ```bash
-   zip -r tiny-reader.xpi manifest.json background compat engine vendor content popup reader welcome logic icons assets
+   node tools/release.mjs
    ```
 
-6. Upload `tiny-reader.xpi` to
+   It leaves `tiny-reader-firefox-<version>.zip`,
+   `tiny-reader-chrome-<version>.zip` (the store build) and
+   `tiny-reader-source-<version>.zip` in `dist/`.
+3. Tag the release, e.g. `git tag -a v1.0.0 -m "tiny reader 1.0.0"`.
+4. Upload `tiny-reader-firefox-<version>.zip` to
    [addons.mozilla.org](https://addons.mozilla.org/developers/) for signing
    (listed or self-distributed); the signed file installs permanently.
+5. Upload `tiny-reader-chrome-<version>.zip` to the
+   [Chrome Web Store developer dashboard](https://chrome.google.com/webstore/devconsole),
+   attaching `tiny-reader-source-<version>.zip` if review asks for sources.
 
 ## Attribution
 
