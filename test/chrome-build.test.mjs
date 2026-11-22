@@ -37,3 +37,12 @@ test("chrome build renders the full speaker icon at every size", () => {
   assert.ok(manifest.permissions.includes("offscreen"), "offscreen permission missing");
   assert.ok(!manifest.permissions.includes("tabs"), "tabs permission still present");
 });
+
+test("chrome manifest takes author, version and the shortcut from the Firefox manifest", () => {
+  execFileSync(process.execPath, [new URL("tools/build-chrome.mjs", root).pathname]);
+  const firefox = JSON.parse(readFileSync(new URL("manifest.json", root), "utf8"));
+  const chrome = JSON.parse(readFileSync(new URL("dist/chrome/manifest.json", root), "utf8"));
+  assert.equal(chrome.author, "Aljaz Ceru");
+  assert.equal(chrome.version, firefox.version);
+  assert.equal(chrome.commands["toggle-read"].suggested_key.default, "Alt+Shift+S");
+});

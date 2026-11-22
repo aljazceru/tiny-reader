@@ -166,15 +166,18 @@ function copyTree(from, to) {
   }
 }
 
+/* manifest.json is the single source of truth for the version. */
+const sourceManifest = JSON.parse(readFileSync(join(root, "manifest.json"), "utf8"));
+
 const MANIFEST = {
   /* Fixed public key → stable extension id for automation and the e2e. */
   key: "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAr6kyJQD6hQ3Ft9jkbCFbAFytxaBw07OVE3BtK8EnV/APs0QeUXwZcvuCgMHIZovbXhxMvQZHyDnR6x3vVT0cTCYjrBqfy0moO6KE+6vpCBjzMPhdlLUXQ/tXFBdCEEPmC8OoqG3IJXndTFjBFft5pPZuO4dcrFooYNVq4Qd+VqWX7C0yuK4R2UGIi/Ri/gZwe+7keliZwHh09P3+SrE/X3q0i/wKL1zFFIH7CC/qxRA9jR3COke7UORIJnb+veaLCzqMQ5V8Sd3TPo5tIwUGODKwb/fk/XiXSpWNsxd/+LjBmPpTuLw0YWCWCmm0D7MDy2WAUaxIQBW0MYpe3T6nDQIDAQAB",
   manifest_version: 3,
   name: "tiny reader",
-  version: "1.0.0",
+  version: sourceManifest.version,
   description:
     "tiny reader reads selected text, pages, pasted text, URLs, PDFs and ePubs aloud with a local voice model or your own TTS endpoint. No account.",
-  author: "tiny reader contributors",
+  author: "Aljaz Ceru",
   icons: { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "96": "icons/icon96.png" },
   permissions: ["storage", "contextMenus", "scripting", "activeTab", "offscreen"],
   optional_host_permissions: ["<all_urls>"],
@@ -186,7 +189,9 @@ const MANIFEST = {
   },
   commands: {
     "toggle-read": {
-      suggested_key: { default: "Alt+Shift+R" }, // Chrome rejects Ctrl+Alt+<letter>
+      /* Alt+Shift+R is Chrome's Reading Mode accelerator (unassignable);
+       * Chrome also rejects Ctrl+Alt+<letter>. */
+      suggested_key: { default: "Alt+Shift+S" },
       description: "Read the selection (or the page) aloud / pause",
     },
   },

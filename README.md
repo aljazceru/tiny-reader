@@ -78,10 +78,9 @@ AudioContext exactly like on Firefox, and no tab ever appears.
   voice/speed, and *Open reader workspace*.
 - **Right-click** — *Read selection with tiny reader* / *Read whole page
   with tiny reader*.
-- **Keyboard** — the *Read the selection (or the page) aloud / pause*
-  command has no working default shortcut (its suggested Ctrl+Alt+R is
-  Firefox's Reader View on Linux); assign one under `about:addons` → gear
-  icon → *Manage Extension Shortcuts*.
+- **Keyboard** — `Alt+Shift+S` toggles *Read the selection (or the page)
+  aloud / pause*. Rebind it under `about:addons` → gear icon → *Manage
+  Extension Shortcuts* (Firefox) or `chrome://extensions/shortcuts` (Chrome).
 
 Playback starts after the first sentence is synthesized, so long inputs
 don't wait for the whole text.

@@ -3,10 +3,10 @@
   "name": "tiny reader",
   "version": "1.0.0",
   "description": "tiny reader reads selected text, pages, pasted text, URLs, PDFs and ePubs aloud with a local voice model or your own TTS endpoint. No account.",
-  "author": "tiny reader contributors",
+  "author": "Aljaz Ceru",
   "browser_specific_settings": {
     "gecko": {
-      "id": "tiny-reader@myfirefox.local",
+      "id": "tiny-reader@disobey.dev",
       "strict_min_version": "140.0",
       "data_collection_permissions": {
         "required": [
@@ -48,7 +48,7 @@
   "commands": {
     "toggle-read": {
       "suggested_key": {
-        "default": "Ctrl+Alt+R"
+        "default": "Alt+Shift+S"
       },
       "description": "Read the selection (or the page) aloud / pause"
     }

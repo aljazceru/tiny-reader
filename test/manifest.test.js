@@ -16,7 +16,8 @@ const manifest = JSON.parse(readFileSync(join(root, "manifest.json"), "utf8"));
 
 test("manifest is Firefox MV3 with reader permissions and a compatible Firefox floor", () => {
   assert.equal(manifest.manifest_version, 3);
-  assert.equal(manifest.browser_specific_settings.gecko.id, "tiny-reader@myfirefox.local");
+  assert.equal(manifest.browser_specific_settings.gecko.id, "tiny-reader@disobey.dev");
+  assert.equal(manifest.author, "Aljaz Ceru");
   assert.equal(manifest.host_permissions, undefined);
   assert.deepEqual(manifest.optional_host_permissions, ["<all_urls>"]);
   assert.equal(manifest.browser_specific_settings.gecko.strict_min_version, "140.0");
@@ -45,7 +46,7 @@ test("no manifest declares content scripts — the reader injects on demand", ()
 test("the toggle-read shortcut is registered with a default binding", () => {
   const command = manifest.commands["toggle-read"];
   assert.ok(command, "toggle-read command missing");
-  assert.match(command.suggested_key.default, /^(Ctrl|Alt|Shift)\+.*(Ctrl|Alt|Shift|R|r|R)$/);
+  assert.equal(command.suggested_key.default, "Alt+Shift+S");
 });
 
 test("the model asset and vendored engine are bundled", () => {
