@@ -65,6 +65,7 @@ let remoteCursor = 0;
 let remoteTarget = 0;
 let remotePumping = false;
 let resumeAt = null; // sentence to land on when a lost Chrome host restarts the job
+let hostRestarts = 0; // consecutive host losses recovered for the current job
 let textChunks = null; // cached splitter (logic/chunks.js)
 let globalPrefs = null; // { voice, speed } from storage
 let sitePrefs = {}; // host -> { voice?, speed? }
@@ -222,12 +223,33 @@ async function ensureWorker() {
   return worker;
 }
 
+/* Chrome's offscreen host can die without warning (reaped or crashed);
+ * posts into it evaporate and the plan never comes — the read would hang
+ * at "planning". A lost host restarts the in-flight engine job on a
+ * fresh document, landing on the same sentence; consecutive losses give
+ * up with a visible error instead of restarting forever. */
+EngineHost.onHostLost(() => {
+  if (!["planning", "playing", "paused"].includes(S.status)) return;
+  if (isRemoteModel()) return seek(Math.max(0, S.playingIndex));
+  if (hostRestarts >= 3) return fail("The audio host keeps restarting — playback failed.");
+  hostRestarts++;
+  resumeAt = Math.max(0, S.playingIndex);
+  beginJob({
+    title: S.page ? S.page.title : "",
+    url: S.page ? S.page.url : "",
+    blocks: S.blockTexts,
+    source: S.source,
+    tabId: S.tabId,
+  });
+});
+
 function onWorkerMessage(message) {
   if (message.type === "ready") {
     sampleRate = message.sampleRate;
     applyModel(message);
   } else if (message.type === "plan") {
     if (message.jobId !== jobId) return;
+    hostRestarts = 0; // the fresh host is healthy
     S.blockOf = message.blockOf;
     S.total = message.total;
     if (!S.total) { resumeAt = null; return fail("Nothing to pronounce here."); }

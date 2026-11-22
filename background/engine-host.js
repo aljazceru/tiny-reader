@@ -29,6 +29,17 @@ const EngineHost = (() => {
   let hadDocument = false; // a document existed at least once
   let hostGeneration = 0; // identifies the current document instance
 
+  /* Document create and close must not overlap: a claim issued while a
+   * close is in flight could adopt a document that is being torn down,
+   * and a close issued mid-claim would kill the document being created.
+   * The ops are rare, so a promise chain serializes them. */
+  let docOp = Promise.resolve();
+  const serializeDocOp = (op) => {
+    const run = docOp.then(op, op);
+    docOp = run.then(() => {}, () => {});
+    return run;
+  };
+
   const route = (event) => {
     const data = event || {};
     for (const sink of sinks) sink(data);
@@ -38,6 +49,17 @@ const EngineHost = (() => {
    * for it so a port is never opened into an unloaded page. */
   let hostAlive = false;
   let helloWaiters = [];
+  /* Single callback, set by the background page: the host document was
+   * lost while it might still have mattered (a post into it can have
+   * evaporated before the disconnect event arrived). */
+  let lostListener = null;
+  function onHostLost(fn) { lostListener = fn; }
+  function markLost() {
+    const wasLive = hostDocument || hostAlive;
+    hostDocument = false;
+    hostAlive = false;
+    if (wasLive && lostListener) lostListener();
+  }
   if (useAudioHost) {
     chrome.runtime.onMessage.addListener((message) => {
       if (!message || message.scope !== "tv-host-hello") return undefined;
@@ -60,13 +82,17 @@ const EngineHost = (() => {
   function connectPort() {
     if (commandPort) return commandPort;
     const port = chrome.runtime.connect({ name: "tv-audio-host" });
+    /* The port serves the document claimed under this generation; its
+     * disconnect event can outlive the document's replacement and must
+     * not tear down the newer claim. */
+    port.generation = hostGeneration;
     port.onMessage.addListener(route);
     port.onDisconnect.addListener(() => {
       if (commandPort === port) commandPort = null;
-      /* The document went away (closed or reaped); the next command
-       * recreates it and waits for a fresh hello. */
-      hostDocument = false;
-      hostAlive = false;
+      /* The document this port served went away (closed or reaped); the
+       * next command recreates it and waits for a fresh hello. A stale
+       * port's late disconnect leaves a newer claim untouched. */
+      if (port.generation === hostGeneration) markLost();
     });
     commandPort = port;
     return port;
@@ -76,10 +102,25 @@ const EngineHost = (() => {
     if (!useAudioHost) return;
     await ensureDocument();
     await hostReady();
+    const port = connectPort();
+    /* A port opened for a document that has since been replaced is dead:
+     * postMessage either throws or evaporates — never write to it. */
+    if (port.generation !== hostGeneration) {
+      commandPort = null;
+      return post(message);
+    }
     try {
-      connectPort().postMessage({ scope: "tv-host", message });
+      port.postMessage({ scope: "tv-host", message });
     } catch (error) {
-      commandPort = null; /* dead port; the next command reconnects */
+      commandPort = null;
+      /* A job lost in transit would hang the read at "planning"; surface
+       * it through the worker error contract so it fails visibly. */
+      if (message.kind === "engine" && message.message && message.message.type === "job") {
+        route({ scope: "tv-engine", error: "audio host connection lost" });
+      }
+      /* The port died with the document it served; mark it lost so the
+       * next command recreates it instead of posting into a void. */
+      markLost();
     }
   }
 
@@ -94,17 +135,19 @@ const EngineHost = (() => {
     hadDocument = true;
     hostGeneration++;
     try {
-      const existing = await chrome.runtime.getContexts({
-        contextTypes: ["OFFSCREEN_DOCUMENT"],
-        documentUrls: [chrome.runtime.getURL(HOST_URL)],
-      });
-      if (!existing.length) {
-        await chrome.offscreen.createDocument({
-          url: HOST_URL,
-          reasons: ["AUDIO_PLAYBACK"],
-          justification: "Plays synthesized speech",
+      await serializeDocOp(async () => {
+        const existing = await chrome.runtime.getContexts({
+          contextTypes: ["OFFSCREEN_DOCUMENT"],
+          documentUrls: [chrome.runtime.getURL(HOST_URL)],
         });
-      }
+        if (!existing.length) {
+          await chrome.offscreen.createDocument({
+            url: HOST_URL,
+            reasons: ["AUDIO_PLAYBACK"],
+            justification: "Plays synthesized speech",
+          });
+        }
+      });
     } catch (error) {
       hostDocument = false;
       throw error;
@@ -115,9 +158,7 @@ const EngineHost = (() => {
     if (!useAudioHost || !hostDocument) return;
     hostDocument = false;
     hostAlive = false;
-    try {
-      await chrome.offscreen.closeDocument();
-    } catch (error) { /* already gone */ }
+    await serializeDocOp(() => chrome.offscreen.closeDocument().catch(() => { /* already gone */ }));
   }
 
   /* True on Chrome when a document existed but is now gone (closed by us
@@ -156,9 +197,13 @@ const EngineHost = (() => {
 
     /* A proxy whose document is gone must not post into its replacement:
      * its messages (or a terminate-engine) would corrupt the fresh host's
-     * own worker. */
+     * own worker. The drop still surfaces through the error contract —
+     * a post that dies silently would hang the read at "planning". */
     postMessage(message) {
-      if (this.generation !== hostGeneration || !hostDocument) return;
+      if (this.generation !== hostGeneration || !hostDocument) {
+        if (this.onerror) this.onerror({ message: "audio host connection lost" });
+        return;
+      }
       post({ kind: "engine", message });
     }
 
@@ -220,7 +265,7 @@ const EngineHost = (() => {
     }
   }
 
-  return { useAudioHost, hostLost, ensureDocument, closeDocument, spawnWorker, createPlayer, LocalWorker };
+  return { useAudioHost, hostLost, onHostLost, ensureDocument, closeDocument, spawnWorker, createPlayer, LocalWorker };
 })();
 
 if (typeof module === "object") module.exports = EngineHost;

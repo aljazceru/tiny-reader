@@ -77,6 +77,11 @@
         const data = job.message || {};
         if (data.type === "load") spawnWorker(data.model);
         else if (worker) worker.postMessage(data);
+        else if (data.type === "job") {
+          /* The job arrived but its engine load was lost in transit;
+           * dropping it would hang the read at "planning" — say so. */
+          uplink({ scope: "tv-engine", error: "engine is not loaded" });
+        }
       } else if (job.kind === "terminate-engine") {
         if (worker) { worker.terminate(); worker = null; }
       } else if (job.kind === "enqueue") {
