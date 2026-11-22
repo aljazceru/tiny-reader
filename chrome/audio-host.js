@@ -53,12 +53,8 @@
       : { type: "load" });
   }
 
-  const commands = [];
-
   /* Sentence ends flow up to the service worker through the port. */
-  let endedCount = 0;
-  const forwardEnded = (tag) => {
-    endedCount++;
+  player.onEnded = (tag) => {
     uplink({
       scope: "tv-player",
       kind: "ended",
@@ -66,12 +62,10 @@
       lastChunk: player.lastChunk,
     });
   };
-  player.onEnded = forwardEnded;
 
   const onCommand = (message) => {
     if (!message || message.scope !== "tv-host") return;
     const job = message.message || {};
-    commands.push(job.kind + ":" + (job.message && job.message.type || ""));
     try {
       if (job.kind === "engine") {
         const data = job.message || {};
@@ -96,10 +90,7 @@
       } else if (job.kind === "stop-sources") {
         player.stopSources();
       }
-    } catch (error) {
-      commands.push("ERROR:" + String((error && error.message) || error).slice(0, 200)
-        + " samples=" + Object.prototype.toString.call(job.samples) + " rate=" + typeof job.rate);
-    }
+    } catch (error) { /* malformed command; the next one still lands */ }
   };
 
   /* The service worker owns the port and connects on demand; this
@@ -116,15 +107,4 @@
   /* Tell the service worker this document is listening; a port opened
    * before this lands would find nobody to deliver to. */
   chrome.runtime.sendMessage({ scope: "tv-host-hello" }).catch(() => {});
-
-  /* Diagnostic handle: audio state for debugging and the Chrome E2E. */
-  globalThis.__tinyReaderAudioHost = {
-    get context() { return player.ctx; },
-    get sources() { return player.sources.size; },
-    get workerAlive() { return Boolean(worker); },
-    get portOpen() { return Boolean(port); },
-    get endedCount() { return endedCount; },
-    get commands() { return commands; },
-    emitEnded(tag) { forwardEnded(tag); },
-  };
 })();
