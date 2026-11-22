@@ -56,6 +56,8 @@ test("chrome manifest takes author, version and the shortcut from the Firefox ma
   assert.equal(chrome.author, "Aljaz Ceru");
   assert.equal(chrome.version, firefox.version);
   assert.equal(chrome.commands["toggle-read"].suggested_key.default, "Alt+Shift+S");
+  /* chrome.runtime.getContexts needs 116; older versions must not install. */
+  assert.equal(chrome.minimum_chrome_version, "116");
 });
 
 test("the store build drops the key, ships a 128 px icon and no Firefox manifest", () => {

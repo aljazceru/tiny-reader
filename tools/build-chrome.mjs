@@ -181,6 +181,8 @@ const MANIFEST = {
    * Dropped from the store build: the Web Store mints its own id. */
   ...(store ? {} : { key: "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAr6kyJQD6hQ3Ft9jkbCFbAFytxaBw07OVE3BtK8EnV/APs0QeUXwZcvuCgMHIZovbXhxMvQZHyDnR6x3vVT0cTCYjrBqfy0moO6KE+6vpCBjzMPhdlLUXQ/tXFBdCEEPmC8OoqG3IJXndTFjBFft5pPZuO4dcrFooYNVq4Qd+VqWX7C0yuK4R2UGIi/Ri/gZwe+7keliZwHh09P3+SrE/X3q0i/wKL1zFFIH7CC/qxRA9jR3COke7UORIJnb+veaLCzqMQ5V8Sd3TPo5tIwUGODKwb/fk/XiXSpWNsxd/+LjBmPpTuLw0YWCWCmm0D7MDy2WAUaxIQBW0MYpe3T6nDQIDAQAB" }),
   manifest_version: 3,
+  /* chrome.runtime.getContexts needs 116 (chrome.offscreen needs 109). */
+  minimum_chrome_version: "116",
   name: "tiny reader",
   version: sourceManifest.version,
   description: sourceManifest.description,
