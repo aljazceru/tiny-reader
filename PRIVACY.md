@@ -13,7 +13,8 @@ browser.
   It is not stored and not sent anywhere.
 - Your settings — voice, speed and per-site preferences — are kept in
   your browser's local extension storage.
-- Voice models you import are stored locally in IndexedDB.
+- Voice models you import and remote endpoint settings — including the
+  API key — are stored locally in IndexedDB.
 - The extension gets no site access at install. It can read a page only
   after you use it there, through the toolbar button, the right-click
   menu or the keyboard shortcut.

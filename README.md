@@ -146,12 +146,12 @@ ports are open. The reading tab (content script or reader workspace) holds a
 | `activeTab` | Read the page you explicitly activate through the toolbar, context menu or shortcut. |
 | `scripting` | Inject the extractor if it is not already present. |
 | `menus` / `contextMenus` | Selection and page context-menu entries. |
-| `storage` | Global and per-site voice/speed preferences, endpoint settings. |
+| `storage` | Global and per-site voice/speed preferences. |
 | `offscreen` (Chrome only) | Play audio from an offscreen document; Chrome service workers have no Web Audio. |
 | `optional_host_permissions: <all_urls>` | No site access at install. When a feature fetches another site — a page URL you enter, a model URL you download, a remote endpoint — the extension asks for just that site at that moment. |
 
-Model bytes are stored locally in IndexedDB. Text you read is never
-stored. Firefox **140 or newer** is required by the bundled PDF.js runtime.
+Model bytes and remote endpoint settings, including the API key, are
+stored locally in IndexedDB. Text you read is never stored. Firefox **140 or newer** is required by the bundled PDF.js runtime.
 
 ## Development and tests
 
