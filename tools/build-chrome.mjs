@@ -183,8 +183,7 @@ const MANIFEST = {
   manifest_version: 3,
   name: "tiny reader",
   version: sourceManifest.version,
-  description:
-    "tiny reader reads selected text, pages, pasted text, URLs, PDFs and ePubs aloud with a local voice model or your own TTS endpoint. No account.",
+  description: sourceManifest.description,
   author: "Aljaz Ceru",
   icons: { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "96": "icons/icon96.png", "128": "icons/icon128.png" },
   permissions: ["storage", "contextMenus", "scripting", "activeTab", "offscreen"],

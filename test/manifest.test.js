@@ -47,6 +47,16 @@ test("no manifest declares content scripts — the reader injects on demand", ()
   assert.deepEqual(chrome.optional_host_permissions, ["<all_urls>"]);
 });
 
+test("the description fits the store limit and the Chrome build copies it", () => {
+  /* Chrome Web Store rejects manifest descriptions over 132 characters;
+   * the built Chrome manifest must carry the same string. */
+  assert.ok(manifest.description.length <= 132, `description is ${manifest.description.length} chars`);
+  const out = mkdtempSync(join(tmpdir(), "tiny-reader-chrome-"));
+  execFileSync(process.execPath, [join(root, "tools", "build-chrome.mjs"), "--out", out]);
+  const chrome = JSON.parse(readFileSync(join(out, "manifest.json"), "utf8"));
+  assert.equal(chrome.description, manifest.description);
+});
+
 test("the toggle-read shortcut is registered with a default binding", () => {
   const command = manifest.commands["toggle-read"];
   assert.ok(command, "toggle-read command missing");

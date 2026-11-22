@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "tiny reader",
   "version": "1.0.0",
-  "description": "tiny reader reads selected text, pages, pasted text, URLs, PDFs and ePubs aloud with a local voice model or your own TTS endpoint. No account.",
+  "description": "Read web pages, selections, PDFs and ePubs aloud with a voice that runs on your computer. No account, no tracking.",
   "author": "Aljaz Ceru",
   "browser_specific_settings": {
     "gecko": {
