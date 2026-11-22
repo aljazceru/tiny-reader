@@ -89,18 +89,19 @@ async function openPage(name, path, marker) {
   throw new Error(`${name} page did not load ${path}`);
 }
 
-/* A read counts as started once getState leaves idle; an error status is
- * a failure, not a pass. */
+/* A read counts as started once it is actually playing (a read parked at
+ * "planning" is a failure, not a pass — an index at 0+ means audio
+ * already flowed). An error status fails immediately. */
 async function waitRead(tab, what) {
   const deadline = Date.now() + 10000;
   for (;;) {
     const s = await state(tab);
     if (s && s.status === "error") throw new Error(`${what}: background reported "${s.error}"`);
-    if (s && s.status !== "idle") {
-      assert(true, `${what} started (status ${s.status})`);
+    if (s && (s.status === "playing" || s.status === "done" || s.index >= 0)) {
+      assert(true, `${what} is playing (status ${s.status}, index ${s.index})`);
       return s;
     }
-    if (Date.now() > deadline) throw new Error(`${what} did not start (status ${s && s.status})`);
+    if (Date.now() > deadline) throw new Error(`${what} did not reach playing (status ${s && s.status})`);
     await delay(250);
   }
 }
