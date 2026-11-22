@@ -19,16 +19,15 @@
  * Node 22+ (global WebSocket).
  */
 
-import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { setTimeout as delay } from "node:timers/promises";
-import { existsSync, readFileSync, rmSync, mkdirSync } from "node:fs";
+import { readFileSync, rmSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
 import { wav } from "../vendor/text.js";
+import { launchChromium, connect } from "./cdp.mjs";
 
-const CHROME = process.env.CHROME_BIN || "/tmp/e2e/chrome-linux64/chrome";
 const DIST = process.env.CHROME_EXT || join(import.meta.dirname, "..", "dist", "chrome");
 const PORT = Number(process.env.CHROME_PORT || 9391);
 const PROFILE = join(homedir(), "tiny-reader-chrome-e2e");
@@ -71,72 +70,15 @@ function startMock(port = 8130) {
   });
 }
 
-for (const path of [CHROME, join(DIST, "manifest.json")]) {
-  if (!existsSync(path)) throw new Error("missing " + path + " (build with node tools/build-chrome.mjs)");
-}
 rmSync(PROFILE, { recursive: true, force: true });
 mkdirSync(PROFILE, { recursive: true });
 
 /* Real-time Web Audio needs a live audio thread; headless Chrome freezes
  * the AudioContext clock, so run headed unless CHROME_HEADLESS=1. */
 const HEADLESS = process.env.CHROME_HEADLESS === "1";
-const chrome = spawn(CHROME, [
-  HEADLESS ? "--headless=new" : "--no-first-run",
-  "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage",
-  "--enable-unsafe-extension-debugging",
-  `--remote-debugging-port=${PORT}`,
-  `--user-data-dir=${PROFILE}`,
-  `--load-extension=${DIST}`,
-  "--window-size=1280,900",
-  "about:blank",
-], {
-  stdio: ["ignore", "ignore", "ignore"],
-  env: process.env.DISPLAY ? process.env : { ...process.env, DISPLAY: ":0" },
+const { list, close: cleanup } = await launchChromium({
+  ext: DIST, port: PORT, headless: HEADLESS, profile: PROFILE,
 });
-const cleanup = () => { try { chrome.kill("SIGKILL"); } catch { /* gone */ } };
-process.on("exit", cleanup);
-
-const list = () => fetch(`http://127.0.0.1:${PORT}/json/list`).then((r) => r.json());
-for (let i = 0; i < 40; i++) {
-  try { await fetch(`http://127.0.0.1:${PORT}/json/version`); break; } catch { await delay(500); }
-}
-
-/* ---- minimal CDP client over the global WebSocket ---- */
-
-function connect(url) {
-  const ws = new WebSocket(url);
-  const pending = new Map();
-  let nextId = 1;
-  const ready = new Promise((resolve, reject) => {
-    ws.addEventListener("open", resolve);
-    ws.addEventListener("error", reject);
-  });
-  ws.addEventListener("message", (event) => {
-    const message = JSON.parse(event.data);
-    if (message.id && pending.has(message.id)) {
-      const { resolve: ok, reject: bad } = pending.get(message.id);
-      pending.delete(message.id);
-      if (message.error) bad(new Error(message.error.message));
-      else ok(message.result);
-    }
-  });
-  return {
-    ready,
-    send(method, params = {}) {
-      const id = nextId++;
-      ws.send(JSON.stringify({ id, method, params }));
-      return new Promise((resolve, reject) => pending.set(id, { resolve, reject }));
-    },
-    async evaluate(expression, awaitPromise = true) {
-      const result = await this.send("Runtime.evaluate", { expression, awaitPromise, returnByValue: true });
-      if (result.exceptionDetails) {
-        throw new Error("page error: " + String(result.exceptionDetails.exception?.description || result.exceptionDetails.text).slice(0, 300));
-      }
-      return result.result.value;
-    },
-    close() { try { ws.close(); } catch { /* gone */ } },
-  };
-}
 
 const assert = (condition, message) => {
   if (!condition) throw new Error("assert failed: " + message);
@@ -156,8 +98,7 @@ try {
   await delay(1500);
   const page0 = (await list()).find((t) => t.type === "page" && t.url === "about:blank");
   const oldTargetId = page0.id;
-  tab = connect(page0.webSocketDebuggerUrl);
-  await tab.ready;
+  tab = await connect(page0.webSocketDebuggerUrl);
   await tab.send("Page.enable");
   await tab.send("Runtime.enable");
   await tab.send("Page.navigate", { url: `chrome-extension://${extensionId}/reader/reader.html` });
@@ -209,8 +150,7 @@ try {
   }
   assert(advanced >= 1, `sentence index advanced to ${advanced + 1} (offscreen audio clock runs)`);
 
-  swTab = connect(sw.webSocketDebuggerUrl);
-  await swTab.ready;
+  swTab = await connect(sw.webSocketDebuggerUrl);
   const hostTabs = await swTab.evaluate(
     "chrome.tabs.query({ url: chrome.runtime.getURL('chrome/audio-host.html') }).then((t) => t.length)");
   assert(hostTabs >= 1, `audio-host tab alive (${hostTabs})`);
@@ -253,8 +193,7 @@ try {
   await fetch(`http://127.0.0.1:${PORT}/json/new?about:blank`, { method: "PUT" });
   await delay(1500);
   const fresh = (await list()).find((t) => t.type === "page" && t.url === "about:blank");
-  tab = connect(fresh.webSocketDebuggerUrl);
-  await tab.ready;
+  tab = await connect(fresh.webSocketDebuggerUrl);
   await tab.send("Page.enable");
   await tab.send("Runtime.enable");
   await tab.send("Page.navigate", { url: `chrome-extension://${extensionId}/reader/reader.html` });
