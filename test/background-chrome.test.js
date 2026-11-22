@@ -166,3 +166,52 @@ test("a host disconnect mid-job restarts the read on a fresh document", async ()
   await until(() => jobs().length === 2, "job reposted to the fresh host");
   assert.notEqual(jobs()[1].jobId, firstJob.jobId);
 });
+
+test("a paused read stays paused when the host is reaped; resume restarts it", async () => {
+  const h = loadBackgroundChrome();
+  h.hello();
+  const jobs = () => h.enginePosts().filter((m) => m && m.type === "job");
+  const replays = () => h.enginePosts().filter((m) => m && m.type === "replay");
+
+  await h.sandbox.readBlocks({ source: "paste", blocks: ["One. Two. Three."] }, null);
+  await until(() => jobs().length === 1, "job posted to the host");
+  const firstJob = jobs()[0];
+  h.ports[0].route({
+    scope: "tv-engine",
+    message: { type: "plan", jobId: firstJob.jobId, total: 3, blockOf: [0, 0, 0] },
+  });
+  /* A chunk flips planning to playing and anchors the position. */
+  h.ports[0].route({
+    scope: "tv-engine",
+    message: { type: "chunk", jobId: firstJob.jobId, index: 1, blockId: 0, audio: [0, 0] },
+  });
+  assert.equal(h.evalIn("S.status"), "playing");
+  assert.equal(h.evalIn("S.playingIndex"), 1);
+
+  await h.evalIn("pause()");
+  assert.equal(h.evalIn("S.status"), "paused");
+
+  /* Chrome reaps the offscreen document ~30 s into a pause (no audio is
+   * playing to keep it alive). The loss must NOT restart the job — a
+   * paused read must not start speaking on its own. */
+  h.disconnect(h.ports[0]);
+  await sleep(50); // a (wrong) restart would have created the document by now
+  assert.equal(h.evalIn("S.status"), "paused");
+  assert.equal(h.offscreenCreated.length, 1);
+  assert.equal(jobs().length, 1);
+
+  /* The user's resume does the restart instead: fresh document, fresh
+   * job, and the plan lands on the paused sentence via resumeAt. */
+  await h.evalIn("resume()");
+  await until(() => h.offscreenCreated.length === 2, "replacement document created");
+  h.hello();
+  await until(() => jobs().length === 2, "job reposted to the fresh host");
+  const secondJob = jobs()[1];
+  h.ports[1].route({
+    scope: "tv-engine",
+    message: { type: "plan", jobId: secondJob.jobId, total: 3, blockOf: [0, 0, 0] },
+  });
+  await until(() => replays().length === 1, "replay posted for the resume point");
+  assert.equal(replays()[0].from, 1);
+  assert.equal(h.evalIn("S.status"), "playing");
+});

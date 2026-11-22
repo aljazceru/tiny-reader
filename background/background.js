@@ -227,9 +227,11 @@ async function ensureWorker() {
  * posts into it evaporate and the plan never comes — the read would hang
  * at "planning". A lost host restarts the in-flight engine job on a
  * fresh document, landing on the same sentence; consecutive losses give
- * up with a visible error instead of restarting forever. */
+ * up with a visible error instead of restarting forever. A paused read
+ * is left alone (Chrome reaps the idle host ~30 s into a pause and the
+ * read must not start speaking on its own) — resume() restarts it. */
 EngineHost.onHostLost(() => {
-  if (!["planning", "playing", "paused"].includes(S.status)) return;
+  if (!["planning", "playing"].includes(S.status)) return;
   if (isRemoteModel()) return seek(Math.max(0, S.playingIndex));
   if (hostRestarts >= 3) return fail("The audio host keeps restarting — playback failed.");
   hostRestarts++;
