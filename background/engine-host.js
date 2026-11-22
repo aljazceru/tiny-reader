@@ -27,6 +27,7 @@ const EngineHost = (() => {
   let commandPort = null;
   let hostDocument = false;
   let hadDocument = false; // a document existed at least once
+  let hostGeneration = 0; // identifies the current document instance
 
   const route = (event) => {
     const data = event || {};
@@ -86,8 +87,12 @@ const EngineHost = (() => {
   async function ensureDocument() {
     if (!useAudioHost || hostDocument) return;
     /* Claim it first: a concurrent caller waits on the hello instead of
-     * racing a second createDocument (only one may exist). */
+     * racing a second createDocument (only one may exist). The generation
+     * changes with the claim — while the new document is still loading,
+     * proxies of the old one must already read as lost and drop posts. */
     hostDocument = true;
+    hadDocument = true;
+    hostGeneration++;
     try {
       const existing = await chrome.runtime.getContexts({
         contextTypes: ["OFFSCREEN_DOCUMENT"],
@@ -100,7 +105,6 @@ const EngineHost = (() => {
           justification: "Plays synthesized speech",
         });
       }
-      hadDocument = true;
     } catch (error) {
       hostDocument = false;
       throw error;
@@ -117,10 +121,13 @@ const EngineHost = (() => {
   }
 
   /* True on Chrome when a document existed but is now gone (closed by us
-   * or reaped by Chrome — the port disconnect marks it). Whatever ran in
-   * it (worker, plan, scheduled audio) went away with it. */
-  function hostLost() {
-    return useAudioHost && hadDocument && !hostDocument;
+   * or reaped by Chrome — the port disconnect marks it). With a worker
+   * argument, true also when its document instance was REPLACED — the
+   * proxy's posts belong to a worker that no longer exists. */
+  function hostLost(instance) {
+    if (!useAudioHost || !hadDocument) return false;
+    if (!hostDocument) return true;
+    return Boolean(instance) && instance.generation !== hostGeneration;
   }
 
   /* Worker stand-in: forwards postMessage to the host-tab engine and
@@ -129,6 +136,7 @@ const EngineHost = (() => {
     constructor(model) {
       this.onmessage = null;
       this.onerror = null;
+      this.generation = hostGeneration;
       this.sink = (data) => {
         if (!data || data.scope !== "tv-engine") return;
         if (data.error && this.onerror) this.onerror({ message: data.error });
@@ -146,11 +154,19 @@ const EngineHost = (() => {
       });
     }
 
-    postMessage(message) { post({ kind: "engine", message }); }
+    /* A proxy whose document is gone must not post into its replacement:
+     * its messages (or a terminate-engine) would corrupt the fresh host's
+     * own worker. */
+    postMessage(message) {
+      if (this.generation !== hostGeneration || !hostDocument) return;
+      post({ kind: "engine", message });
+    }
 
     terminate() {
       sinks.delete(this.sink);
-      post({ kind: "terminate-engine" });
+      if (this.generation === hostGeneration && hostDocument) {
+        post({ kind: "terminate-engine" });
+      }
     }
   }
 

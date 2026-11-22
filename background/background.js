@@ -204,6 +204,13 @@ function terminateWorker(instance) {
 }
 
 async function ensureWorker() {
+  if (worker && EngineHost.hostLost(worker)) {
+    /* The host document is gone (idle-closed or reaped) and its worker
+     * died with it; the stale proxy would silently drop the next job. */
+    worker.onmessage = null;
+    worker.onerror = null;
+    worker = null;
+  }
   if (worker) return worker;
   worker = await spawnWorker(activeModel ? { name: activeModel.name, buffer: activeModel.buffer } : undefined);
   wireWorker(worker);
@@ -754,12 +761,12 @@ async function pause() {
 
 async function resume() {
   if (S.status !== "paused" || !player) return;
-  if (EngineHost.hostLost()) {
+  if (EngineHost.hostLost(worker)) {
     /* Chrome reaped the offscreen document while paused; the worker and
      * its plan went with it, so there is nothing to resume. Restart the
-     * job and land on the paused sentence. */
+     * job and land on the paused sentence (ensureWorker drops the stale
+     * proxy and respawns). */
     if (isRemoteModel()) return seek(Math.max(0, S.playingIndex));
-    if (worker) { worker.onmessage = null; worker.onerror = null; worker = null; }
     resumeAt = Math.max(0, S.playingIndex);
     return beginJob({
       title: S.page ? S.page.title : "",

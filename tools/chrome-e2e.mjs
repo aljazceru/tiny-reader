@@ -218,6 +218,28 @@ try {
   }
   assert(continued, `resume after the offscreen document was closed continues (${continued && continued.status}, index ${continued && continued.index} from ${pausedIndex})`);
 
+  /* 3c. a read after the idle close: the service worker closes the
+   * document when idle, but the stale HostWorker proxy survives — the
+   * next read must respawn the engine in a fresh document instead of
+   * posting the job into a document with no worker. */
+  const swIdle = (await list()).find((t) => t.type === "service_worker" && t.url.includes("chrome-sw.js"));
+  assert(swIdle, "service worker present for the idle close");
+  swTab = await connect(swIdle.webSocketDebuggerUrl);
+  await swTab.evaluate("EngineHost.closeDocument()");
+  swTab.close(); /* a held-open SW debugger session wedges later steps */
+  swTab = null;
+  await delay(1000);
+  await tab.evaluate(
+    "browser.runtime.sendMessage({ type: 'readBlocks', blocks: ['The engine is fresh again.', 'A second sentence proves it.', 'And a third closes the read.'], source: 'paste', title: 'Chrome e2e idle close' }); true");
+  let freshRead = null;
+  for (let i = 0; i < 30 && !(freshRead && freshRead.index >= 1); i++) {
+    await delay(1000);
+    const s = await state();
+    if (i % 5 === 4) console.log("   idle-close read wait:", s && s.status, "index", s && s.index);
+    if (s && s.status === "playing" && s.index >= 1) freshRead = s;
+  }
+  assert(freshRead, "a read after the idle close starts a fresh engine");
+
   /* 4. remote endpoint through the models form — in a fresh reader tab:
    * the long-lived CDP session wedges around the model swap while the
    * page itself keeps working, so re-open it. */

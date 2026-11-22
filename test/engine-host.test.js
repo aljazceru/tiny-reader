@@ -130,3 +130,18 @@ test("hostLost flips when the host port disconnects", async () => {
   h.disconnect();
   assert.equal(h.EngineHost.hostLost(), true);
 });
+
+test("a worker proxy from a dead document cannot post into its replacement", async () => {
+  const h = harness();
+  h.hello();
+  const oldWorker = await h.EngineHost.spawnWorker(undefined);
+  await until(() => h.posted.length === 1, "load message on the port");
+  h.disconnect();                      // document reaped, proxy orphaned
+  await h.EngineHost.ensureDocument(); // a fresh document takes its place
+  h.hello();
+  await h.EngineHost.spawnWorker(undefined);
+  await until(() => h.posted.length === 2, "fresh worker's load message");
+  oldWorker.postMessage({ type: "job", jobId: 1 });
+  await sleep(30);
+  assert.equal(h.posted.length, 2); // the stale proxy dropped it
+});
