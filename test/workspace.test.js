@@ -58,3 +58,17 @@ test("no saved-article library: nothing read is kept in storage", () => {
   assert.doesNotMatch(background, /librarySave|libraryItems: \[\]|queueIds: \[\]/, "background still persists a library or queue");
   assert.doesNotMatch(content, /data-role="queue"/, "mini-player still shows a queue chip");
 });
+
+test("reader and popup scripts declare every constant they use", () => {
+  /* 68e793e dropped `const NOTICE_MS` but kept its use: every status notice
+   * threw, so opening a file (ePub, PDF, …) never started reading. */
+  for (const file of ["reader/reader.js", "popup/popup.js"]) {
+    const source = readFileSync(join(root, file), "utf8")
+      .replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "") // comments
+      .replace(/`(?:\\.|[^`\\])*`|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g, '""'); // strings
+    const used = new Set(source.match(/\b[A-Z][A-Z0-9]*_[A-Z0-9_]+\b|\b[A-Z]{3,}\b/g) || []);
+    for (const name of used) {
+      assert.match(source, new RegExp(`(?:const|let|var|function|import\\s*\\{[^}]*)\\s*\\b${name}\\b`), `${file} uses ${name} but never declares it`);
+    }
+  }
+});

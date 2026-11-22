@@ -94,7 +94,7 @@ export function mountModels(root, hooks = {}) {
   });
   const style = el("style", { text: `
     .tv-models h2 { margin: 0 0 12px; }
-    .tv-models h2:not(:first-child) { margin-top: 1.8rem; }
+    .tv-models h2:not(:first-of-type) { margin-top: 1.8rem; }
     .tv-models input[type="text"], .tv-models input[type="url"], .tv-models input[type="password"] { width: min(100%, 34rem); box-sizing: border-box; }
     .tv-models .tv-model-note, .tv-models .tv-model-status { font-size: 0.85rem; color: var(--muted, #555); }
     .tv-models .tv-model-error { color: var(--error, #b3261e); }

@@ -1,11 +1,10 @@
 # tiny reader
 
-tiny reader is a local, open-source answer to [ElevenReader](https://elevenreader.io/):
-the reading experience — selected text or whole pages, pasted text, URLs,
-PDFs and ePubs — with speech synthesized on your machine by the bundled
-tiny-voca model, or by any OpenAI-compatible TTS endpoint you configure.
-No account, no telemetry, and no network after install except for content,
-models, or endpoints you explicitly fetch.
+tiny reader is a browser extension that reads selected text, whole pages,
+pasted text, URLs, PDFs and ePubs aloud. Speech is synthesized on your
+machine by the bundled tiny-voca model, or by any OpenAI-compatible TTS
+endpoint you configure. No account, no telemetry, and no network after
+install except for content, models, or endpoints you explicitly fetch.
 
 The bundled [tiny-voca](https://github.com/n4ze3m/tiny-voca) model is 8 MB
 (Q8_0 GGUF, 4.5M parameters). The model and its dizione phonemizer run in
@@ -48,22 +47,12 @@ upstream, including guesses for foreign names and unusual spellings.
 
 ## Install
 
-### Temporary (for development)
-
 1. Open `about:debugging#/runtime/this-firefox`
 2. Click *Load Temporary Add-on…* and select the extension's `manifest.json`
 
-The add-on stays loaded until Firefox restarts.
-
-### Permanent
-
-```bash
-npx web-ext build
-```
-
-Then in `about:addons`: gear icon → *Install Add-on From File…* and pick the
-built `.zip`/`.xpi`. There is no signing or build step; models and libraries
-are bundled. See the release checklist below for the exact packaging command.
+The add-on stays loaded until Firefox restarts. A permanent install needs a
+signed package (see the release checklist); release Firefox refuses
+unsigned add-ons.
 
 ## Chrome / Chromium
 
@@ -90,18 +79,18 @@ stops playback.
   voice/speed, and *Open reader workspace*.
 - **Right-click** — *Read selection with tiny reader* / *Read whole page
   with tiny reader*.
-- **Ctrl+Alt+R** — reads the selection if there is one, else the page;
-  pauses and resumes when already reading. Rebind in Firefox's extension
-  settings.
+- **Keyboard** — the *Read the selection (or the page) aloud / pause*
+  command has no working default shortcut (its suggested Ctrl+Alt+R is
+  Firefox's Reader View on Linux); assign one under `about:addons` → gear
+  icon → *Manage Extension Shortcuts*.
 
-Sentence-at-a-time streaming starts playback before a long input is fully
-synthesized. A 12-sentence look-ahead keeps memory bounded, and a keepalive
-port prevents Firefox from unloading the event page during long reads.
+Playback starts after the first sentence is synthesized, so long inputs
+don't wait for the whole text.
 
 ## Privacy
 
-Local reads stay local: text you read and your preferences never leave the machine. The extension makes network requests only when you
-ask it to: fetching an http(s) URL you paste into the workspace, downloading
+Local reads stay local: text you read and your preferences never leave the
+machine. The extension makes network requests only when you ask it to: fetching an http(s) URL you paste into the workspace, downloading
 a custom model URL you provide, or — if you configure a remote TTS
 endpoint — sending each sentence to that endpoint (with your API key).
 There is no analytics, no telemetry, and no background upload.
@@ -158,8 +147,7 @@ ports are open. The reading tab (content script or reader workspace) holds a
 | `host_permissions: <all_urls>` | Reader-workspace URL extraction and model downloads you explicitly request; content extraction on the page being read. No analytics or background upload. |
 
 Model bytes are stored locally in IndexedDB. Text you read is never
-stored. Firefox **140 or newer** is required by the
-bundled PDF.js runtime (`strict_min_version: 140.0` in the manifest).
+stored. Firefox **140 or newer** is required by the bundled PDF.js runtime.
 
 ## Development and tests
 
@@ -171,45 +159,21 @@ node --test        # extraction, PDF/ePub, preferences, player, real model synth
 npx web-ext lint   # manifest + addon-linter checks
 ```
 
-End-to-end through a real Firefox (geckodriver):
+Browser end-to-end suites (each script's header lists its prerequisites and
+environment variables):
 
-```bash
-mkdir -p /tmp/e2e && cd /home/you/tiny-reader   # the extension checkout
-zip -qr /tmp/e2e/tiny-reader.xpi manifest.json background engine vendor content popup reader logic icons assets
-npm i --prefix /tmp/e2e geckodriver             # /tmp/e2e/node_modules/geckodriver
-# a Firefox build reachable as /tmp/e2e/firefox/firefox, or set FIREFOX_BIN
-cd test/fixtures && python3 -m http.server 8123 &
-cd ../.. && python3 -m http.server 8124 &       # extension dir for module E2E
-XPI_PATH=/tmp/e2e/tiny-reader.xpi node tools/e2e.mjs
-XPI_PATH=/tmp/e2e/tiny-reader.xpi node tools/reader-e2e.mjs
-node tools/build-chrome.mjs && node tools/chrome-e2e.mjs   # Chromium, CDP
-```
-
-Prerequisites: a Firefox binary (`FIREFOX_BIN`), geckodriver
-(`GECKODRIVER_BIN`), the packaged extension (`XPI_PATH`), the fixture server
-on port 8123, and — for `tools/reader-e2e.mjs` — the extension directory
-served on port 8124. See the header of each script for the full environment
-variables and what is asserted.
-
-`tools/e2e.mjs` covers page reading, selection, follow-along highlight,
-keepalive, and the floating mini-player. `tools/reader-e2e.mjs` covers paste,
-URL, PDF, ePub, custom model import and
-invalid-model rejection. `tools/chrome-e2e.mjs` drives the Chrome build
-through raw CDP (bundled model through the audio-host tab, speed
-slider, pause/resume, and a remote TTS endpoint against a built-in mock
-server; no test hooks, `CHROME_BIN` to override the binary — it runs headed
-because headless Chrome freezes the Web Audio clock, so a `DISPLAY` is
-needed). The Firefox
-harnesses patch the test-only xpi (documented in each script, never
-shipped) because automation cannot grant `activeTab` or execute inside
-`moz-extension` pages.
+- `tools/e2e.mjs` — page reading, selection, highlight, keepalive and the
+  mini-player in a real Firefox.
+- `tools/reader-e2e.mjs` — reader workspace paste, URL, PDF, ePub, custom
+  model import and invalid-model rejection in a real Firefox.
+- `tools/chrome-e2e.mjs` — the Chrome build over CDP, including a remote
+  TTS endpoint against a built-in mock server.
 
 ## Release checklist
 
 1. Update the version in `manifest.json`.
 2. `node --test` and `npx web-ext lint` pass.
-3. `node tools/e2e.mjs` and `node tools/reader-e2e.mjs` pass against a real
-   Firefox.
+3. The browser end-to-end suites pass.
 4. Tag the release, e.g. `git tag -a v1.0.0 -m "tiny reader 1.0.0"`.
 5. Package from the extension root (nothing outside these paths ships):
 
@@ -217,9 +181,9 @@ shipped) because automation cannot grant `activeTab` or execute inside
    zip -r tiny-reader.xpi manifest.json background engine vendor content popup reader logic icons assets
    ```
 
-6. Optional: upload `tiny-reader.xpi` to
+6. Upload `tiny-reader.xpi` to
    [addons.mozilla.org](https://addons.mozilla.org/developers/) for signing
-   and distribution on AMO.
+   (listed or self-distributed); the signed file installs permanently.
 
 ## Attribution
 

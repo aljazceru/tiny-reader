@@ -106,13 +106,12 @@ function renderIcon(size) {
     pixels[at + 2] = Math.round(before[2] * (1 - alpha) + b * alpha);
     pixels[at + 3] = Math.max(before[3], a);
   };
-  // 2x supersampling inside the scaled viewBox.
-  const step = scale / 2;
+  // 2x2 supersampling, mapping each pixel back into the 96-unit viewBox.
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       for (const [dx, dy] of [[0.25, 0.25], [0.75, 0.25], [0.25, 0.75], [0.75, 0.75]]) {
-        const px = (x + dx) * scale;
-        const py = (y + dy) * scale;
+        const px = (x + dx) / scale;
+        const py = (y + dy) / scale;
         // Rounded-square backdrop.
         const radius = 20;
         const corner = Math.min(px, py, VIEW - px, VIEW - py);
@@ -133,8 +132,8 @@ function renderIcon(size) {
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       for (const [dx, dy] of [[0.25, 0.25], [0.75, 0.25], [0.25, 0.75], [0.75, 0.75]]) {
-        const px = (x + dx) * scale;
-        const py = (y + dy) * scale;
+        const px = (x + dx) / scale;
+        const py = (y + dy) / scale;
         if (inside(SPEAKER, px, py)) put(x, y, BLUE);
         for (const arc of strokes) {
           const distance = Math.hypot(px - arc.cx, py - arc.cy);
@@ -176,7 +175,7 @@ const MANIFEST = {
   description:
     "tiny reader reads selected text, pages, pasted text, URLs, PDFs and ePubs aloud with a local voice model or your own TTS endpoint. No account.",
   author: "tiny reader contributors",
-  icons: { "48": "icons/icon48.png", "96": "icons/icon96.png" },
+  icons: { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "96": "icons/icon96.png" },
   content_scripts: [
     {
       matches: ["<all_urls>"],
@@ -190,7 +189,7 @@ const MANIFEST = {
   action: {
     default_title: "tiny reader",
     default_popup: "popup/popup.html",
-    default_icon: { "48": "icons/icon48.png", "96": "icons/icon96.png" },
+    default_icon: { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "96": "icons/icon96.png" },
   },
   commands: {
     "toggle-read": {
@@ -210,8 +209,7 @@ for (const entry of SHARED) {
 // Chrome-only bootstrap; Firefox files that reference it stay unused.
 copyFileSync(join(root, "manifest.json"), join(out, "manifest.firefox.json"));
 writeFileSync(join(out, "manifest.json"), JSON.stringify(MANIFEST, null, 2) + "\n");
-writeFileSync(join(out, "icons", "icon48.png"), renderIcon(48));
-writeFileSync(join(out, "icons", "icon96.png"), renderIcon(96));
+for (const size of [16, 32, 48, 96]) writeFileSync(join(out, "icons", `icon${size}.png`), renderIcon(size));
 
 // The popup and reader pages need the shim before their own scripts.
 for (const page of ["popup/popup.html", "reader/reader.html"]) {

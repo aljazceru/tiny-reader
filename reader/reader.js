@@ -20,6 +20,7 @@ import { blocksFromText, extractHtml, extractUrl } from "./extract.js";
 
 const $ = (id) => document.getElementById(id);
 const POLL_MS = 400;
+const NOTICE_MS = 6000; // how long a local notice survives the next polls
 const speedLabel = (value) => `${Number(value)}×`;
 
 const ICONS = {

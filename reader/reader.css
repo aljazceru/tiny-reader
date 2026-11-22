@@ -405,6 +405,8 @@ a {
     max-width: 1080px;
   }
 
+  header { max-width: 1080px; }
+
   #transport { grid-area: transport; position: static; box-shadow: none; }
   #sources  { grid-area: sources; }
   #settings { grid-area: settings; }
