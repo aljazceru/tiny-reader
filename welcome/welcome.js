@@ -14,7 +14,7 @@
 const $ = (id) => document.getElementById(id);
 const POLL_MS = 400;
 const BUSY = ["loading", "planning", "playing", "paused"];
-const SAMPLE_TEXT = '"Hello! This is tiny reader. Select any text on a page and I will read it to you."';
+const SAMPLE_TEXT = "Hello! This is tiny reader. Select any text on a page and I will read it to you.";
 
 const STATUS_TEXT = {
   loading: "Loading the voice model…",
