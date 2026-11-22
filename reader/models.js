@@ -11,6 +11,8 @@
  * error surfaces in the status line.
  */
 
+import { requestOrigin } from "./permissions.js";
+
 /* Curated, known-good sources of tiny-voca-compatible GGUFs. Links point at
  * model repositories; download a file and paste its direct URL above. */
 const COMMUNITY = [
@@ -159,6 +161,15 @@ export function mountModels(root, hooks = {}) {
         return;
       }
     }
+    if (!staged && download) {
+      /* First await in this handler (see permissions.js): a URL download
+       * needs host access to the model's origin, asked for on this click. */
+      const grant = await requestOrigin(download, "download this model");
+      if (!grant.granted) {
+        say(grant.message, true);
+        return;
+      }
+    }
     const model = staged
       ? { name: name.value.trim() || suggestName(staged.name), buffer: staged.buffer }
       : { name: name.value.trim() || suggestName(download), url: download };
@@ -194,6 +205,19 @@ export function mountModels(root, hooks = {}) {
     };
     if (!remote.url) {
       say("Paste the endpoint URL first.", true);
+      return;
+    }
+    /* First await in this handler (see permissions.js): the endpoint check
+     * and every later sentence go to that origin from the background. */
+    let grant;
+    try {
+      grant = await requestOrigin(remote.url, "use this endpoint");
+    } catch (error) {
+      say(String((error && error.message) || error), true);
+      return;
+    }
+    if (!grant.granted) {
+      say(grant.message, true);
       return;
     }
     applyRemote.disabled = true;

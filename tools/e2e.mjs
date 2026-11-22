@@ -6,8 +6,11 @@
  * moz-extension pages. The test therefore builds its own xpi from the
  * packaged one with two documented, test-only patches (never shipped):
  *
- *   1. host_permissions <all_urls> — stands in for the activeTab grant a
- *      real toolbar click provides; every code path after it is identical;
+ *   1. host_permissions <all_urls> — required, not redundant: the shipped
+ *      manifest only offers optional host permissions, so this stands in
+ *      for the activeTab grant a real toolbar click provides and for the
+ *      per-origin prompts a real user confirms; every code path after it
+ *      is identical;
  *   2. a bridge in background.js that (a) maps URL-hash navigations
  *      (#e2e-play, #e2e-pause, #e2e-resume, #e2e-stop, #e2e-next) to the
  *      exact functions the popup's runtime-message handlers call, and

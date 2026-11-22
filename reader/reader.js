@@ -17,6 +17,7 @@ import { extractPdf } from "./pdf.js";
 import { extractEpub } from "./epub.js";
 import { mountModels } from "./models.js";
 import { blocksFromText, extractHtml, extractUrl } from "./extract.js";
+import { requestOrigin } from "./permissions.js";
 
 const $ = (id) => document.getElementById(id);
 const POLL_MS = 400;
@@ -121,6 +122,12 @@ async function readUrl() {
   if (!url) return setNotice("Enter a page URL first.", true);
   setNotice("Fetching the page…");
   try {
+    /* permissions.request must be the first await in this handler: Firefox
+     * drops the user gesture (and with it the prompt) after any earlier
+     * await. The scheme defaulting matches what extractUrl applies. */
+    const page = /^[a-z][a-z0-9+.-]*:/i.test(url) ? url : `https://${url}`;
+    const grant = await requestOrigin(page, "read this page");
+    if (!grant.granted) return setNotice(grant.message, true);
     const { title, blocks } = await extractUrl(url);
     await readInput({ title, url, blocks, source: "url" });
   } catch (error) {

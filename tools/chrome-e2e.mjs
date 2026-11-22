@@ -1,7 +1,8 @@
 /*
  * tiny reader — Chrome/Chromium end-to-end test (raw CDP, no test hooks).
  *
- * Verifies the dist/chrome build against a real Chromium:
+ * Verifies the dist/chrome build against a real Chromium (a patched copy
+ * that pre-holds the mock endpoint's host permission — see below):
  *   1. bundled-model read of pasted text through the reader UI — sentence
  *      advancement proves the offscreen AudioContext actually runs (onended
  *      drives it) and that the offscreen document is alive
@@ -21,9 +22,9 @@
 
 import { createServer } from "node:http";
 import { setTimeout as delay } from "node:timers/promises";
-import { readFileSync, rmSync, mkdirSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 
 import { wav } from "../vendor/text.js";
 import { launchChromium, connect } from "./cdp.mjs";
@@ -31,6 +32,18 @@ import { launchChromium, connect } from "./cdp.mjs";
 const DIST = process.env.CHROME_EXT || join(import.meta.dirname, "..", "dist", "chrome");
 const PORT = Number(process.env.CHROME_PORT || 9391);
 const PROFILE = join(homedir(), "tiny-reader-chrome-e2e");
+
+/* The shipped build holds no host_permissions — site access is granted
+ * per origin through a permissions.request prompt, which this headless
+ * run cannot click (CDP Browser.grantPermissions does not cover
+ * extension host permissions). Like tools/e2e.mjs on Firefox, the test
+ * loads a patched copy of the build that already holds the mock
+ * endpoint's origin; requestOrigin() then resolves without a prompt. */
+const TEST_DIST = mkdtempSync(join(tmpdir(), "tiny-reader-chrome-e2e-"));
+cpSync(DIST, TEST_DIST, { recursive: true });
+const testManifest = JSON.parse(readFileSync(join(TEST_DIST, "manifest.json"), "utf8"));
+testManifest.host_permissions = ["http://127.0.0.1/*"];
+writeFileSync(join(TEST_DIST, "manifest.json"), JSON.stringify(testManifest, null, 2) + "\n");
 
 /* ---- built-in OpenAI-compatible /audio/speech mock ---- */
 
@@ -77,7 +90,7 @@ mkdirSync(PROFILE, { recursive: true });
  * AudioContext clock on Chromium 157+ (verified by the offscreen spike). */
 const HEADLESS = process.env.CHROME_HEADLESS === "1";
 const { list, close: cleanup } = await launchChromium({
-  ext: DIST, port: PORT, headless: HEADLESS, profile: PROFILE,
+  ext: TEST_DIST, port: PORT, headless: HEADLESS, profile: PROFILE,
 });
 
 const assert = (condition, message) => {
@@ -256,7 +269,12 @@ try {
   await fill("remoteName", "mock-tts");
   await fill("remoteUrl", "http://127.0.0.1:8130/v1/audio/speech");
   await fill("remoteVoices", "mo, ck");
-  await click("applyRemote");
+  /* The apply handler's first await is permissions.request; a synthetic
+   * click carries no user activation unless the evaluate asks for it. */
+  await tab.send("Runtime.evaluate", {
+    expression: 'document.getElementById("applyRemote").click(); true',
+    userGesture: true,
+  });
   let remoteModel = null;
   for (let i = 0; i < 20 && !remoteModel; i++) {
     await delay(1500);

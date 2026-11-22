@@ -17,7 +17,8 @@ const manifest = JSON.parse(readFileSync(join(root, "manifest.json"), "utf8"));
 test("manifest is Firefox MV3 with reader permissions and a compatible Firefox floor", () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.browser_specific_settings.gecko.id, "tiny-reader@myfirefox.local");
-  assert.deepEqual(manifest.host_permissions, ["<all_urls>"]);
+  assert.equal(manifest.host_permissions, undefined);
+  assert.deepEqual(manifest.optional_host_permissions, ["<all_urls>"]);
   assert.equal(manifest.browser_specific_settings.gecko.strict_min_version, "140.0");
   assert.deepEqual([...manifest.permissions].sort(), ["activeTab", "menus", "scripting", "storage"]);
 });
@@ -37,6 +38,8 @@ test("no manifest declares content scripts — the reader injects on demand", ()
   execFileSync(process.execPath, [join(root, "tools", "build-chrome.mjs")]);
   const chrome = JSON.parse(readFileSync(join(root, "dist", "chrome", "manifest.json"), "utf8"));
   assert.equal(chrome.content_scripts, undefined);
+  assert.equal(chrome.host_permissions, undefined);
+  assert.deepEqual(chrome.optional_host_permissions, ["<all_urls>"]);
 });
 
 test("the toggle-read shortcut is registered with a default binding", () => {

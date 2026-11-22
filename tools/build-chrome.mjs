@@ -177,7 +177,7 @@ const MANIFEST = {
   author: "tiny reader contributors",
   icons: { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "96": "icons/icon96.png" },
   permissions: ["storage", "contextMenus", "scripting", "activeTab", "offscreen"],
-  host_permissions: ["<all_urls>"],
+  optional_host_permissions: ["<all_urls>"],
   background: { service_worker: "background/chrome-sw.js" },
   action: {
     default_title: "tiny reader",
