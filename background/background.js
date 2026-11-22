@@ -9,11 +9,9 @@
  * of playback so long pages never pile up in memory.
  *
  * Web pages (selection / whole page) and direct inputs from the reader
- * workspace (paste, url, pdf, epub, txt, library) share one job path; direct
+ * workspace (paste, url, pdf, epub, txt) share one job path; direct
  * inputs own their sender tab and never require a content script or
- * highlighting. Saved articles live in a library (browser.storage, newest
- * first, max 50) with an ordered play queue that auto-advances when an item
- * finishes. The active model is persisted through the ModelStore global and
+ * highlighting. Nothing that is read is stored. The active model is persisted through the ModelStore global and
  * swapped by validating candidates in a fresh worker; a persisted model is
  * loaded eagerly at startup so its name and voices can drive the UI, while
  * the bundled default stays lazy. Voice/speed preferences are global
@@ -31,10 +29,9 @@
 
 const DEFAULT_PREFS = { voice: "M2", speed: 1 };
 const LOOKAHEAD = 12;
-const MAX_CHARS = 500000; // hard cap for direct input and saved items
-const LIBRARY_CAP = 50; // newest saved items kept
+const MAX_CHARS = 500000; // hard cap for direct input
 const PAGE_SOURCES = ["selection", "page"];
-const DIRECT_SOURCES = ["paste", "url", "pdf", "epub", "txt", "library"];
+const DIRECT_SOURCES = ["paste", "url", "pdf", "epub", "txt"];
 const BUNDLED_MODEL = { name: "tiny-voca (bundled)", voices: ["M2", "F2"] };
 const WORKER_LOAD_TIMEOUT = 120000; // custom GGUF validation can take a while
 
@@ -43,15 +40,13 @@ const S = {
   error: null,
   tabId: null,
   page: null, // { title, url }
-  source: null, // "selection" | "page" | paste | url | pdf | epub | txt | library
+  source: null, // "selection" | "page" | paste | url | pdf | epub | txt
   total: 0,
   blockOf: [], // block id per utterance index
   blockTexts: [], // block text per block id, for the popup preview
   playingIndex: -1,
   hasSelection: false,
   lastRms: null,
-  itemId: null, // saved library item currently loaded (libraryItemId)
-  queueIds: [], // ordered saved-item play queue
   model: { name: BUNDLED_MODEL.name, voices: [] }, // confirmed by worker ready
 };
 
@@ -69,7 +64,6 @@ let globalPrefs = null; // { voice, speed } from storage
 let sitePrefs = {}; // host -> { voice?, speed? }
 let prefsCache = null; // effective prefs for the active context
 let activeModel = null; // persisted descriptor { name, buffer } | { name, remote }; null = bundled
-let queueLoaded = false;
 
 /* ---------------------------------------------------------------- prefs */
 
@@ -116,7 +110,7 @@ async function setPrefs(patch) {
       sitePrefs = { ...sitePrefs, [host]: { ...(sitePrefs[host] || {}), ...clean } };
       await browser.storage.local.set({ sitePrefs });
     } else {
-      /* Idle and direct reader inputs (paste/url/pdf/epub/txt/library)
+      /* Idle and direct reader inputs (paste/url/pdf/epub/txt)
        * change the global defaults. */
       globalPrefs = { ...globalPrefs, ...clean };
       await browser.storage.local.set({ voice: globalPrefs.voice, speed: globalPrefs.speed });
@@ -502,7 +496,6 @@ async function restartJobIfReading() {
     blocks: S.blockTexts,
     source: S.source,
     tabId: S.tabId,
-    itemId: S.itemId,
   });
   if (wasPaused) await pause();
 }
@@ -518,7 +511,6 @@ function fail(message) {
 function snapshot() {
   const blockId = S.playingIndex >= 0 ? S.blockOf[S.playingIndex] : -1;
   const preview = blockId >= 0 ? S.blockTexts[blockId] || "" : "";
-  const at = S.itemId !== null ? S.queueIds.indexOf(S.itemId) : -1;
   return {
     status: S.status,
     error: S.error,
@@ -531,123 +523,13 @@ function snapshot() {
     lastRms: player ? player.lastChunk : null,
     prefs: prefsCache,
     model: S.model,
-    libraryItemId: S.itemId,
-    queueRemaining: at >= 0 ? S.queueIds.length - at - 1 : S.queueIds.length,
   };
-}
-
-/* -------------------------------------------------------------- library */
-
-function libraryId() {
-  return `item-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 /* Only nonempty strings count as blocks; everything else is dropped. */
 function sanitizeBlocks(blocks) {
   if (!Array.isArray(blocks)) return [];
   return blocks.filter((text) => typeof text === "string" && text.trim().length > 0);
-}
-
-/* Same item contract as logic/library.js: { id, title, url, blocks, source,
- * createdAt }, newest first, at most 50 items, 500k characters each. */
-function normalizeItem(input) {
-  const data = input && typeof input === "object" ? input : {};
-  const blocks = sanitizeBlocks(data.blocks);
-  if (!blocks.length) throw new Error("Nothing to save — the text is empty.");
-  const characters = blocks.reduce((sum, text) => sum + text.length, 0);
-  if (characters > MAX_CHARS) throw new Error("Too much text to save — the limit is 500,000 characters.");
-  return {
-    id: typeof data.id === "string" && data.id ? data.id : libraryId(),
-    title: typeof data.title === "string" && data.title.trim() ? data.title.trim() : "Untitled",
-    url: typeof data.url === "string" ? data.url : "",
-    blocks,
-    source: typeof data.source === "string" && data.source ? data.source : "page",
-    createdAt: Number.isFinite(data.createdAt) ? data.createdAt : Date.now(),
-  };
-}
-
-async function libraryLoad() {
-  const stored = await browser.storage.local.get({ libraryItems: [] });
-  return Array.isArray(stored.libraryItems)
-    ? stored.libraryItems.filter((item) => item && typeof item === "object" && typeof item.id === "string")
-    : []; // newest first
-}
-
-async function libraryPersist(items) {
-  await browser.storage.local.set({ libraryItems: items.slice(0, LIBRARY_CAP) });
-}
-
-async function librarySave(data) {
-  const item = normalizeItem(data);
-  const items = await libraryLoad();
-  await libraryPersist([item, ...items.filter((existing) => existing.id !== item.id)]);
-  return item;
-}
-
-async function libraryList() {
-  const [items, queueIds] = await Promise.all([libraryLoad(), ensureQueue().then(() => S.queueIds)]);
-  return { items, queueIds };
-}
-
-async function libraryDelete(data) {
-  const id = data && typeof data.id === "string" ? data.id : null;
-  if (!id) throw new Error("No saved item id to delete.");
-  const items = await libraryLoad();
-  await libraryPersist(items.filter((item) => item.id !== id));
-  await ensureQueue();
-  if (S.queueIds.includes(id)) await setQueue(S.queueIds.filter((queued) => queued !== id));
-  return { ok: true, id };
-}
-
-async function ensureQueue() {
-  if (queueLoaded) return;
-  const stored = await browser.storage.local.get({ queueIds: [] });
-  S.queueIds = Array.isArray(stored.queueIds) ? stored.queueIds.filter((id) => typeof id === "string") : [];
-  queueLoaded = true;
-}
-
-async function setQueue(ids) {
-  const clean = [...new Set((Array.isArray(ids) ? ids : []).filter((id) => typeof id === "string" && id))];
-  S.queueIds = clean;
-  queueLoaded = true;
-  await browser.storage.local.set({ queueIds: clean });
-  return clean;
-}
-
-async function libraryQueue(data) {
-  const ids = data && Array.isArray(data.ids) ? data.ids : null;
-  if (!ids) throw new Error("Queue needs a list of saved item ids.");
-  const items = await libraryLoad();
-  const known = new Set(items.map((item) => item.id));
-  const queueIds = await setQueue(ids.filter((id) => known.has(id)));
-  return { queueIds };
-}
-
-async function startLibraryItem(item, ownerTabId) {
-  const blocks = sanitizeBlocks(item.blocks);
-  if (!blocks.length) throw new Error("Saved item has no readable text.");
-  await stopPlayback();
-  prefsCache = await prefsForContext(null); // saved items read with global prefs
-  beginJob({
-    title: item.title,
-    url: typeof item.url === "string" ? item.url : "",
-    blocks,
-    source: "library",
-    tabId: ownerTabId,
-    itemId: item.id,
-  });
-}
-
-async function libraryRead(data, sender) {
-  const id = data && typeof data.id === "string" ? data.id : null;
-  if (!id) throw new Error("No saved item id to read.");
-  const items = await libraryLoad();
-  const item = items.find((candidate) => candidate.id === id);
-  if (!item) throw new Error("Saved item not found.");
-  await ensureQueue();
-  const ownerTabId = sender && sender.tab && typeof sender.tab.id === "number" ? sender.tab.id : S.tabId;
-  await startLibraryItem(item, ownerTabId);
-  return { ok: true, id };
 }
 
 /* ------------------------------------------------------- page plumbing */
@@ -709,7 +591,6 @@ async function stopPlayback() {
   S.tabId = null;
   S.page = null;
   S.source = null;
-  S.itemId = null;
   S.blockOf = [];
   S.lastRms = null;
   badge();
@@ -744,13 +625,12 @@ async function read(tab, source) {
 }
 
 /* One job path for every input: page reads (selection/page), direct reader
- * inputs (paste/url/pdf/epub/txt) and saved library items. The caller has
+ * inputs (paste/url/pdf/epub/txt). The caller has
  * already stopped any previous job and set the effective prefs. */
-async function beginJob({ title, url, blocks, source, tabId = null, itemId = null }) {
+async function beginJob({ title, url, blocks, source, tabId = null }) {
   S.tabId = typeof tabId === "number" ? tabId : null;
   S.page = { title: title || "", url: url || "" };
   S.source = source;
-  S.itemId = itemId;
   S.blockTexts = blocks;
   S.blockOf = [];
   S.total = 0;
@@ -798,7 +678,6 @@ async function readBlocks(data, sender) {
     blocks,
     source,
     tabId,
-    itemId: typeof input.itemId === "string" ? input.itemId : null,
   });
   return { ok: true, source, blocks: blocks.length, characters };
 }
@@ -853,31 +732,6 @@ async function finish() {
   await toTab({ type: "clearHighlight" });
   toTab({ type: "reading", on: false });
   releaseKeepalive();
-  await advanceQueue();
-}
-
-/* Queue auto-advance: when a saved item finishes, read the next queued id
- * (skipping items deleted since the queue was set). */
-async function advanceQueue() {
-  if (S.itemId === null) return;
-  await ensureQueue();
-  const items = await libraryLoad();
-  const known = new Set(items.map((item) => item.id));
-  const upcoming = S.queueIds.filter((id) => known.has(id));
-  const at = upcoming.indexOf(S.itemId);
-  const nextId = at >= 0 ? upcoming[at + 1] : null;
-  if (!nextId) {
-    S.itemId = null;
-    return;
-  }
-  const ownerTabId = S.tabId;
-  const nextItem = items.find((item) => item.id === nextId);
-  try {
-    await startLibraryItem(nextItem, ownerTabId);
-  } catch (error) {
-    S.itemId = null;
-    fail(String((error && error.message) || error));
-  }
 }
 
 /* --------------------------------------------------------- pause logic */
@@ -954,7 +808,6 @@ async function probeSelection() {
 
 async function refreshState() {
   await ensurePrefs();
-  await ensureQueue();
   prefsCache = effectivePrefs(currentPageHost());
   return snapshot();
 }
@@ -986,16 +839,6 @@ browser.runtime.onMessage.addListener((message, sender) => {
         .then((tab) => ({ ok: true, tabId: tab.id }));
     case "readBlocks":
       return ensureModelLoaded().then(() => readBlocks(message, sender));
-    case "librarySave":
-      return librarySave(message);
-    case "libraryList":
-      return libraryList();
-    case "libraryDelete":
-      return libraryDelete(message);
-    case "libraryQueue":
-      return libraryQueue(message);
-    case "libraryRead":
-      return ensureModelLoaded().then(() => libraryRead(message, sender));
     case "setModel":
       return setModel(message);
     default:
@@ -1006,6 +849,8 @@ browser.runtime.onMessage.addListener((message, sender) => {
 /* ------------------------------------------------------- entry points */
 
 browser.runtime.onInstalled.addListener(() => {
+  /* Older versions kept a saved-article library and queue; drop them. */
+  browser.storage.local.remove(["libraryItems", "queueIds"]).catch(() => {});
   /* Firefox exposes both namespaces; Chrome only contextMenus. */
   const menus = browser.menus || browser.contextMenus;
   menus.create({ id: "tv-selection", title: "Read selection with tiny reader", contexts: ["selection"] });
@@ -1028,13 +873,12 @@ browser.tabs.onRemoved.addListener((tabId) => {
 
 /* -------------------------------------------------------------- startup */
 
-/* Prefs and queue load lazily on demand; a persisted active model loads
+/* Prefs load lazily on demand; a persisted active model loads
  * eagerly (and starts its worker) so its name and voices can drive the UI
  * without a read first. The bundled default stays lazy, exactly as before. */
 const modelStartup = (async () => {
   await ensurePrefs();
   prefsCache = effectivePrefs(currentPageHost());
-  await ensureQueue();
   activeModel = await loadStoredModel();
   if (activeModel && activeModel.remote) {
     S.model = { name: activeModel.name, voices: activeModel.remote.voices.slice() };

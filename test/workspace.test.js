@@ -14,22 +14,20 @@ const content = readFileSync(join(root, "content/content.js"), "utf8");
 
 test("reader workspace exposes every input and transport control", () => {
   for (const id of [
-    "pasteText", "readPaste", "urlInput", "readUrl", "fileInput", "saveCurrent",
+    "pasteText", "readPaste", "urlInput", "readUrl", "fileInput",
     "playPause", "stop", "prev", "next", "voice", "speed", "status", "progress", "preview",
   ]) {
     assert.ok(html.includes(`id="${id}"`), `reader.html missing #${id}`);
   }
-  for (const section of ["library", "models"]) {
-    assert.ok(html.includes(`id="${section}"`), `reader.html missing #${section} mount`);
-  }
+  assert.ok(html.includes('id="models"'), "reader.html missing #models mount");
 });
 
 test("reader page wires the real module contracts", () => {
   assert.match(html, /type="module"\s+src="reader\.js"/);
-  for (const module of ["./pdf.js", "./epub.js", "./library.js", "./models.js"]) {
+  for (const module of ["./pdf.js", "./epub.js", "./models.js"]) {
     assert.ok(reader.includes(module), `reader.js does not import ${module}`);
   }
-  for (const file of ["reader/pdf.js", "reader/epub.js", "reader/library.js", "reader/models.js", "reader/extract.js", "reader/reader.css"]) {
+  for (const file of ["reader/pdf.js", "reader/epub.js", "reader/models.js", "reader/extract.js", "reader/reader.css"]) {
     assert.ok(existsSync(join(root, file)), `${file} missing`);
   }
   assert.match(reader, /readBlocks/, "reader.js must send readBlocks");
@@ -42,4 +40,21 @@ test("mini-player exposes the documented control surface", () => {
     assert.ok(content.includes(`data-action="${action}"`) || content.includes(`data-action=\\"${action}\\"`) || content.includes(`data-action=${action}`), `mini-player missing ${action}`);
   }
   assert.match(content, /prefers-reduced-motion/, "mini-player must respect reduced motion");
+});
+
+test("reader page defines the speed label helper it calls", () => {
+  /* reader.js once called speedLabel() without defining it (it only lived in
+   * popup.js): the slider label froze and every state render threw. */
+  assert.ok(reader.includes("speedLabel("), "reader.js no longer renders the speed label");
+  assert.match(reader, /(const|function)\s+speedLabel\b/, "reader.js calls speedLabel() but never defines it");
+});
+
+test("no saved-article library: nothing read is kept in storage", () => {
+  const background = readFileSync(join(root, "background/background.js"), "utf8");
+  for (const file of ["reader/library.js", "logic/library.js"]) {
+    assert.ok(!existsSync(join(root, file)), `${file} should be gone`);
+  }
+  assert.ok(!html.includes('id="library"') && !html.includes('id="saveCurrent"'), "reader.html still has library UI");
+  assert.doesNotMatch(background, /librarySave|libraryItems: \[\]|queueIds: \[\]/, "background still persists a library or queue");
+  assert.doesNotMatch(content, /data-role="queue"/, "mini-player still shows a queue chip");
 });

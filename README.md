@@ -22,9 +22,6 @@ plain JavaScript — no ONNX, no WASM, no cloud runtime.
 - **Reader workspace**: paste text, load TXT/HTML/PDF/ePub files, or enter
   an http(s) URL. Ctrl+Enter reads the pasted text; file selection starts
   immediately.
-- **Library and queue**: save the current input or browser tab (up to 50
-  articles), read/delete saved entries, and queue several for automatic
-  sequential playback.
 - **Per-site preferences**: voice and speed changes made during a web-page
   read are remembered for that hostname; direct reader inputs use the global
   defaults.
@@ -103,8 +100,7 @@ port prevents Firefox from unloading the event page during long reads.
 
 ## Privacy
 
-Local reads stay local: text you read, your library, and your preferences
-never leave the machine. The extension makes network requests only when you
+Local reads stay local: text you read and your preferences never leave the machine. The extension makes network requests only when you
 ask it to: fetching an http(s) URL you paste into the workspace, downloading
 a custom model URL you provide, or — if you configure a remote TTS
 endpoint — sending each sentence to that endpoint (with your API key).
@@ -114,7 +110,7 @@ There is no analytics, no telemetry, and no background upload.
 
 ```
 manifest.json            MV3, non-persistent event page, Firefox 140+
-background/background.js shared job path, runtime APIs, queue, models,
+background/background.js shared job path, runtime APIs, models,
                          site preferences, popup/menu/command routing,
                          remote-endpoint synthesis pump
 background/player.js     gapless Web Audio player (pause = context suspend)
@@ -126,9 +122,9 @@ engine/engine-worker.mjs module worker: model loading/validation, sentence
 content/content.js       selection/page extraction, highlight, keepalive,
                          floating mini-player
 reader/                  full-page workspace, URL/HTML/PDF/ePub extraction,
-                         library and model management
-logic/                   pure resampling, remote-TTS helpers, library,
-                         model store, preference helpers
+                         model management
+logic/                   pure resampling, remote-TTS helpers, model
+                         store, preference helpers
 chrome/audio-host.*    Chrome audio-host tab (engine worker + player)
 compat/compat.js         `browser` ← `chrome` shim for Chrome pages
 vendor/                  tiny-voca engine, Readability, PDF.js, fflate
@@ -136,7 +132,7 @@ assets/tiny-voca.gguf    bundled model + phonemizer data
 popup/                   toolbar controller and workspace entry
 test/                    node:test suites and PDF/ePub/article fixtures
 tools/e2e.mjs            page/selection/mini-player browser E2E
-tools/reader-e2e.mjs     workspace/library/model browser E2E
+tools/reader-e2e.mjs     workspace/model browser E2E
 tools/build-chrome.mjs   dist/chrome build (Chrome manifest + PNG icons)
 tools/fetch-model.mjs    re-download the bundled GGUF
 ```
@@ -145,7 +141,7 @@ The worker posts each sentence as a `Float32Array` at 24 kHz (remote
 endpoints: audio decoded from what the server returns). The player
 resamples to the device rate, schedules buffers back-to-back, and reports
 true completion through `onended`. Progress, paragraph highlighting, the
-look-ahead window and queue advancement follow actual audio, not synthesis.
+look-ahead window and end of reading follow actual audio, not synthesis.
 
 Firefox unloads idle MV3 event pages but keeps them loaded while message
 ports are open. The reading tab (content script or reader workspace) holds a
@@ -158,11 +154,11 @@ ports are open. The reading tab (content script or reader workspace) holds a
 | `activeTab` | Read the page you explicitly activate through the toolbar, context menu or shortcut. |
 | `scripting` | Inject the extractor if it is not already present. |
 | `menus` | Selection and page context-menu entries. |
-| `storage` | Library, queue, global and per-site voice/speed preferences. |
+| `storage` | Global and per-site voice/speed preferences, endpoint settings. |
 | `host_permissions: <all_urls>` | Reader-workspace URL extraction and model downloads you explicitly request; content extraction on the page being read. No analytics or background upload. |
 
-Model bytes are stored locally in IndexedDB. Article text and library data
-stay in extension storage. Firefox **140 or newer** is required by the
+Model bytes are stored locally in IndexedDB. Text you read is never
+stored. Firefox **140 or newer** is required by the
 bundled PDF.js runtime (`strict_min_version: 140.0` in the manifest).
 
 ## Development and tests
@@ -171,7 +167,7 @@ Unit tests and lint (no install step; plain `node --test` covers both the
 CommonJS `.js` and ESM `.mjs` suites):
 
 ```bash
-node --test        # extraction, PDF/ePub, library, preferences, player, real model synthesis
+node --test        # extraction, PDF/ePub, preferences, player, real model synthesis
 npx web-ext lint   # manifest + addon-linter checks
 ```
 
@@ -197,7 +193,7 @@ variables and what is asserted.
 
 `tools/e2e.mjs` covers page reading, selection, follow-along highlight,
 keepalive, and the floating mini-player. `tools/reader-e2e.mjs` covers paste,
-URL, PDF, ePub, saved-library queue auto-advance, custom model import and
+URL, PDF, ePub, custom model import and
 invalid-model rejection. `tools/chrome-e2e.mjs` drives the Chrome build
 through raw CDP (bundled model through the audio-host tab, speed
 slider, pause/resume, and a remote TTS endpoint against a built-in mock

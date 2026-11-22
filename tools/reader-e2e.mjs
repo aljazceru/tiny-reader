@@ -3,7 +3,7 @@
  *
  * Firefox forbids WebDriver script/element access to privileged extension
  * pages, so this harness verifies the two halves separately:
- *   1. the real background runtime APIs (readBlocks, library*, setModel,
+ *   1. the real background runtime APIs (readBlocks, setModel,
  *      getState) driven from the normal article page through a test-only
  *      content-script relay patched into the test xpi;
  *   2. the actual reader/extract.js, reader/pdf.js and reader/epub.js modules
@@ -60,7 +60,7 @@ if (!window.__tinyVocaE2eRelay) {
     status: state.status, index: state.index, total: state.total,
     title: state.page && state.page.title, source: state.source,
     model: state.model && state.model.name, voices: state.model && state.model.voices,
-    queueRemaining: state.queueRemaining, error: state.error,
+    error: state.error,
     speed: state.prefs && state.prefs.speed,
   });
   setInterval(() => {
@@ -186,41 +186,17 @@ try {
   await waitFor(/^tv-e2e state /, "content relay alive");
   assert(true, "content-script relay is talking to the background");
 
-  await resultOf({ type: "readBlocks", title: "QUEUE_ALPHA", blocks: ["QUEUE_ALPHA begins here. This short paragraph has two sentences."], source: "paste" }, "direct alpha");
-  await waitFor(/tv-e2e state .*QUEUE_ALPHA/, "direct paste playback");
+  await resultOf({ type: "readBlocks", title: "DIRECT_ALPHA", blocks: ["DIRECT_ALPHA begins here. This short paragraph has two sentences."], source: "paste" }, "direct alpha");
+  await waitFor(/tv-e2e state .*DIRECT_ALPHA/, "direct paste playback");
   assert(true, "pasted text read through the real readBlocks API");
-  await resultOf({ type: "librarySave", title: "QUEUE_ALPHA", url: "", blocks: ["QUEUE_ALPHA begins here. This short paragraph has two sentences."], source: "paste" }, "save alpha");
   await resultOf({ type: "stop" }, "stop alpha");
-
-  await resultOf({ type: "readBlocks", title: "QUEUE_BETA", blocks: ["QUEUE_BETA follows next. It is the second saved item."], source: "paste" }, "direct beta");
-  await waitFor(/tv-e2e state .*QUEUE_BETA/, "second direct playback");
-  await resultOf({ type: "librarySave", title: "QUEUE_BETA", url: "", blocks: ["QUEUE_BETA follows next. It is the second saved item."], source: "paste" }, "save beta");
-  await resultOf({ type: "stop" }, "stop beta");
-
-  const library = await resultOf({ type: "libraryList" }, "library list");
-  const alpha = library.items.find((item) => item.title === "QUEUE_ALPHA");
-  const beta = library.items.find((item) => item.title === "QUEUE_BETA");
-  assert(Boolean(alpha && beta), "both direct inputs saved to the library");
-
-  await resultOf({ type: "libraryQueue", ids: [alpha.id, beta.id] }, "queue set");
-  await resultOf({ type: "libraryRead", id: alpha.id }, "queue start");
-  const seen = new Set();
-  const queueDeadline = Date.now() + 90000;
-  while (Date.now() < queueDeadline && seen.size < 2) {
-    const current = await title();
-    if (current.includes("QUEUE_ALPHA")) seen.add("alpha");
-    if (current.includes("QUEUE_BETA")) seen.add("beta");
-    await delay(800);
-  }
-  assert(seen.size === 2, `queue auto-advanced through both saved items (${[...seen].join(" → ")})`);
-  await resultOf({ type: "stop" }, "stop queue");
 
   /* Model import over a real URL, then invalid-model rejection. */
   await resultOf({ type: "setModel", name: "e2e-custom", url: `${MODULE_ORIGIN}/assets/tiny-voca.gguf` }, "custom model download");
   await waitFor(/tv-e2e state .*e2e-custom/, "custom model active", 70000);
   assert(true, "custom GGUF downloaded, validated and activated");
-  await resultOf({ type: "readBlocks", title: "QUEUE_ALPHA", blocks: ["QUEUE_ALPHA begins here. This short paragraph has two sentences."], source: "paste" }, "custom model playback start");
-  await waitFor(/tv-e2e state .*QUEUE_ALPHA.*e2e-custom/, "custom model playback");
+  await resultOf({ type: "readBlocks", title: "DIRECT_ALPHA", blocks: ["DIRECT_ALPHA begins here. This short paragraph has two sentences."], source: "paste" }, "custom model playback start");
+  await waitFor(/tv-e2e state .*DIRECT_ALPHA.*e2e-custom/, "custom model playback");
   await resultOf({ type: "stop" }, "stop custom playback");
 
   let rejected = null;

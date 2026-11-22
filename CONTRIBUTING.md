@@ -13,7 +13,7 @@ test suites and tools.
 ```bash
 git clone <your fork>
 cd tiny-reader
-node --test        # unit tests (extraction, PDF/ePub, library, prefs, player, remote TTS, model)
+node --test        # unit tests (extraction, PDF/ePub, prefs, player, remote TTS, model)
 npx web-ext lint   # manifest + addon-linter checks
 node tools/build-chrome.mjs   # optional: dist/chrome build for Chromium
 ```

@@ -79,6 +79,7 @@ h2 {
 
 main {
   display: grid;
+  align-items: start;
   gap: 14px;
   max-width: 780px;
   margin: 0 auto;
@@ -114,7 +115,9 @@ section {
 }
 
 textarea,
-input[type="url"] {
+input[type="url"],
+input[type="text"],
+input[type="password"] {
   width: 100%;
   padding: 9px 11px;
   border: 1px solid var(--border);
@@ -127,12 +130,16 @@ input[type="url"] {
 
 textarea:hover,
 input[type="url"]:hover,
+input[type="text"]:hover,
+input[type="password"]:hover,
 select:hover {
   border-color: var(--accent);
 }
 
 textarea:focus,
 input[type="url"]:focus,
+input[type="text"]:focus,
+input[type="password"]:focus,
 select:focus {
   outline: none;
   border-color: var(--accent);
@@ -220,6 +227,18 @@ button:disabled {
 
 .controls button {
   min-width: 44px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.controls button svg {
+  flex: none;
+  width: 17px;
+  height: 17px;
+  fill: currentColor;
 }
 
 #transport {
@@ -236,25 +255,9 @@ button:disabled {
 
 .controls button.icon {
   width: 44px;
-  min-width: 44px;
-  height: 40px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
 }
 
-.controls button.icon svg {
-  width: 17px;
-  height: 17px;
-  fill: currentColor;
-}
-
-.controls #playPause {
-  flex: 1;
-}
-
-.controls #readAgain,
-.controls #saveCurrent {
+.controls #readAgain {
   margin-left: auto;
 }
 
@@ -272,14 +275,12 @@ select {
 }
 
 #settings {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 14px;
 }
 
 #settings label {
-  flex: 1;
-  min-width: 180px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -334,6 +335,26 @@ select {
   font-weight: 600;
 }
 
+a {
+  color: var(--accent);
+}
+
+.tv-model-row {
+  display: block;
+  margin: 12px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.tv-model-row input {
+  margin-top: 5px;
+  font-weight: 400;
+}
+
+.tv-models > button {
+  margin-top: 12px;
+}
+
 .muted {
   color: var(--muted);
   font-weight: 400;
@@ -377,8 +398,9 @@ select {
     grid-template-areas:
       "transport transport"
       "sources   settings"
-      "library   models"
+      "sources   models"
       "status    status";
+    grid-template-rows: auto auto 1fr auto;
     grid-template-columns: minmax(0, 1fr) 360px;
     max-width: 1080px;
   }
@@ -386,7 +408,6 @@ select {
   #transport { grid-area: transport; position: static; box-shadow: none; }
   #sources  { grid-area: sources; }
   #settings { grid-area: settings; }
-  #library  { grid-area: library; }
   #models   { grid-area: models; }
   #status   { grid-area: status; }
 }

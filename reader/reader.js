@@ -15,12 +15,12 @@
 
 import { extractPdf } from "./pdf.js";
 import { extractEpub } from "./epub.js";
-import { mountLibrary } from "./library.js";
 import { mountModels } from "./models.js";
 import { blocksFromText, extractHtml, extractUrl } from "./extract.js";
 
 const $ = (id) => document.getElementById(id);
 const POLL_MS = 400;
+const speedLabel = (value) => `${Number(value)}×`;
 
 const ICONS = {
   play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 4.8 19 12 7.5 19.2z"/></svg>',
@@ -43,7 +43,6 @@ const SOURCE_LABELS = {
   txt: "file",
   pdf: "PDF",
   epub: "ePub",
-  library: "library",
 };
 
 const VOICE_LABELS = { M2: "M2 (male)", F2: "F2 (female)" };
@@ -94,7 +93,6 @@ async function readInput(input) {
     blocks,
     source: input.source || "paste",
   };
-  if (input.itemId) message.itemId = input.itemId;
   try {
     await browser.runtime.sendMessage(message);
   } catch (error) {
@@ -186,19 +184,6 @@ $("readAgain").addEventListener("click", () => {
   readInput(lastRead);
 });
 
-$("saveCurrent").addEventListener("click", async () => {
-  if (!lastRead) return setNotice("Read something first — there is nothing to save.", true);
-  const item = await send({
-    type: "librarySave",
-    title: lastRead.title,
-    url: lastRead.url,
-    blocks: lastRead.blocks,
-    source: lastRead.source,
-  });
-  if (item && item.id) setNotice(`Saved “${item.title || "untitled"}” to the library.`);
-  else if (!item) setNotice("The library did not answer.", true);
-});
-
 $("voice").addEventListener("change", () => send({ type: "setPrefs", patch: { voice: $("voice").value } }));
 $("speed").addEventListener("input", () => {
   $("speedValue").textContent = speedLabel(Number($("speed").value));
@@ -209,7 +194,7 @@ $("speed").addEventListener("change", () => send({ type: "setPrefs", patch: { sp
 
 /* While this tab drives a read (loading/planning/playing/paused), hold the
  * same runtime port the content script holds, so Firefox keeps the event
- * page alive for long direct reads and queue auto-advance. */
+ * page alive for long direct reads. */
 function setReading(on) {
   if (on && !keepalive) {
     keepalive = browser.runtime.connect({ name: "tv-keepalive" });
@@ -264,7 +249,6 @@ function render() {
   $("prev").disabled = !busy || index <= 0;
   $("next").disabled = !busy || (total ? index + 1 >= total : index < 0);
   $("readAgain").disabled = !lastRead;
-  $("saveCurrent").disabled = !lastRead;
 
   let progress = "Nothing is being read.";
   if (state.status === "done") {
@@ -274,7 +258,6 @@ function render() {
     const label = SOURCE_LABELS[state.source] || state.source;
     if (label) parts.push(label);
     if (state.page && state.page.title) parts.push(truncate(state.page.title.trim(), 40));
-    if (state.queueRemaining > 0) parts.push(`${state.queueRemaining} next in queue`);
     progress = parts.join(" · ");
     if (state.status === "paused") progress += " · paused";
   }
@@ -290,7 +273,6 @@ function render() {
 
 /* ------------------------------------------------------------- startup */
 
-mountLibrary($("library"), { onStatus: (text) => setNotice(text) });
 mountModels($("models"), { onChanged: () => refresh() });
 
 refresh();

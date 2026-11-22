@@ -215,13 +215,13 @@
       transition:width .18s ease;
       font:12px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Ubuntu,sans-serif;
       -webkit-user-select:none;user-select:none;
-      --bg:#ffffff;--fg:#1f1f24;--muted:#5f6368;--line:rgba(0,0,0,.14);--chip:rgba(0,0,0,.06);
-      --accent:#14804a;--warn:#e8a100;--bad:#b3261e;
+      --bg:#ffffff;--head:#f1f4f9;--fg:#1c1e21;--muted:#4a5058;--line:rgba(0,0,0,.12);--chip:rgba(26,104,209,.09);
+      --accent:#1a68d1;--on-accent:#ffffff;--ring:rgba(26,104,209,.3);--warn:#e8a100;--bad:#b3261e;
     }
     @media (prefers-color-scheme:dark){
       :host{
-        --bg:#1e1f24;--fg:#e8eaed;--muted:#9aa0a6;--line:rgba(255,255,255,.16);--chip:rgba(255,255,255,.09);
-        --accent:#3ddc84;--warn:#fdd663;--bad:#f28b82;
+        --bg:#202227;--head:#2a2d34;--fg:#f1f3f5;--muted:#c3c8cf;--line:rgba(255,255,255,.14);--chip:rgba(122,171,255,.14);
+        --accent:#7aabff;--on-accent:#10131a;--ring:rgba(122,171,255,.35);--warn:#fdd663;--bad:#f28b82;
       }
     }
     *{box-sizing:border-box;margin:0;padding:0}
@@ -237,10 +237,11 @@
     .head{
       display:flex;align-items:center;gap:7px;
       padding:9px 6px 9px 12px;
+      background:var(--head);border-bottom:1px solid var(--line);
       cursor:grab;touch-action:none;
     }
     .card.dragging .head{cursor:grabbing}
-    .dot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--muted)}
+    .dot{flex:none;width:9px;height:9px;border-radius:50%;background:var(--muted)}
     .head button{
       appearance:none;border:0;background:transparent;color:var(--muted);
       width:26px;height:26px;border-radius:7px;flex:none;
@@ -249,16 +250,16 @@
     .head button:hover{background:var(--chip);color:var(--fg)}
     .head button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
     .head button svg{width:14px;height:14px;fill:currentColor;display:block}
-    .dot.playing,.dot.done{background:var(--accent)}
+    .dot.playing,.dot.done{background:var(--accent);box-shadow:0 0 0 3px var(--ring)}
     .dot.paused{background:var(--warn)}
     .dot.loading,.dot.planning{background:var(--warn);animation:mp-pulse 1.1s ease-in-out infinite}
     .dot.error{background:var(--bad)}
     .status{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
-    .count{flex:none;color:var(--muted);font-variant-numeric:tabular-nums}
+    .count{flex:none;padding:1px 8px;border-radius:999px;background:var(--chip);color:var(--fg);font-weight:600;font-variant-numeric:tabular-nums}
     .preview{
       display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;
       overflow:hidden;max-height:2.9em;
-      padding:0 12px;color:var(--muted);
+      margin-top:9px;padding:0 12px;color:var(--muted);
       -webkit-user-select:text;user-select:text;
     }
     .preview.error{color:var(--bad)}
@@ -267,23 +268,34 @@
       appearance:none;border:0;background:transparent;color:var(--fg);
       width:34px;height:34px;border-radius:8px;flex:none;
       display:inline-flex;align-items:center;justify-content:center;
-      cursor:pointer;transition:background-color .15s ease;
+      cursor:pointer;transition:background-color .15s ease,color .15s ease;
+    }
+    .controls button svg{width:16px;height:16px;fill:currentColor;display:block}
+    .controls button:hover:not(:disabled){background:var(--chip);color:var(--accent)}
+    .controls button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+    .controls button:disabled{opacity:.4;cursor:default}
+    .controls .pause{
+      width:40px;height:40px;border-radius:50%;
+      background:var(--accent);color:var(--on-accent);
+      box-shadow:0 2px 8px var(--ring);
+    }
+    .controls .pause:hover:not(:disabled){background:var(--accent);color:var(--on-accent);filter:brightness(1.1)}
+    .controls .stop:hover:not(:disabled){color:var(--bad)}
+    .controls [data-action="slower"]{margin-left:auto}
+    .controls [data-action="slower"],.controls [data-action="faster"]{
+      width:28px;height:28px;background:var(--chip);color:var(--accent);font-size:16px;font-weight:700;
     }
     .rate{
-      min-width:34px;text-align:center;font-size:12px;font-weight:600;
+      min-width:38px;text-align:center;font-size:13px;font-weight:700;
       color:var(--fg);font-variant-numeric:tabular-nums;user-select:none;
     }
-    .queue{
-      margin-left:auto;padding:2px 9px;border-radius:999px;
-      background:var(--chip);color:var(--muted);font-size:11px;white-space:nowrap;
-    }
     .track{
-      position:relative;height:4px;margin:0 12px 11px;border-radius:2px;
+      position:relative;height:5px;margin:0 12px 12px;border-radius:3px;
       background:var(--chip);overflow:hidden;
     }
     .fill{
       position:absolute;top:0;bottom:0;left:0;width:0;
-      border-radius:2px;background:var(--accent);
+      border-radius:3px;background:linear-gradient(90deg,var(--accent),#a78bfa);
       transition:width .3s linear;
     }
     .track.indet .fill{width:38%;animation:mp-slide 1.3s ease-in-out infinite}
@@ -311,7 +323,6 @@
         <button data-action="slower" aria-label="Slower">−</button>
         <span class="rate" data-role="rate" title="Playback speed">1×</span>
         <button data-action="faster" aria-label="Faster">+</button>
-        <span class="queue" data-role="queue" hidden></span>
       </div>
       <div class="track" data-role="progress" role="progressbar" aria-label="Reading progress"
         aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill"></div></div>
@@ -351,7 +362,6 @@
       pause: root.querySelector('[data-action="pause"]'),
       next: root.querySelector('[data-action="next"]'),
       collapse: root.querySelector('[data-action="collapse"]'),
-      queue: root.querySelector('[data-role="queue"]'),
       rate: root.querySelector('[data-role="rate"]'),
     };
 
@@ -450,10 +460,6 @@
     mini.refs.preview.textContent = text;
     mini.refs.preview.title = text;
     mini.refs.preview.classList.toggle("error", Boolean(error));
-
-    const queued = typeof data.queueRemaining === "number" ? data.queueRemaining : 0;
-    mini.refs.queue.hidden = !(queued > 0);
-    mini.refs.queue.textContent = `queue · ${queued}`;
 
     const active = status === "playing" || status === "paused";
     mini.refs.prev.disabled = !active;

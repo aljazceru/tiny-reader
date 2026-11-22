@@ -15,7 +15,6 @@ importScripts(
   "../compat/compat.js",
   "../logic/chunks.js",
   "../logic/remote.js",
-  "../logic/library.js",
   "../logic/model-store.js",
   "../logic/prefs.js",
   "../background/engine-host.js",
